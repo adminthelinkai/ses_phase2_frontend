@@ -1,0 +1,5 @@
+{
+  "name": "EPCM Frontend Foundation",
+  "description": "A high-performance, desktop-only engineering execution system foundation for EPCM project management, featuring a fixed 3-panel workspace and deliverable-driven node chains.",
+  "requestFramePermissions": []
+}
