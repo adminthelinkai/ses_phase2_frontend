@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import RightSidebar from './RightSidebar';
 import WorkspaceHeader from './WorkspaceHeader';
 import { projects, deliverablesMap, deliverableWorkflows, Project } from '../../data';
+import { useAuth } from '../../context/AuthContext';
 
 const ChatView = lazy(() => import('./ChatView'));
 const NodeContextView = lazy(() => import('./NodeContextView'));
@@ -23,18 +24,19 @@ const Workspace = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   
-  const [viewMode, setViewMode] = useState<'chat' | 'node'>(() => {
+  const [viewMode, setViewMode] = useState<'project_chat' | 'global_chat'>(() => {
     const saved = localStorage.getItem(WORKSPACE_STORAGE_KEY);
     if (saved) {
       try {
         const state = JSON.parse(saved);
-        return state.viewMode || 'node';
+        return state.viewMode || 'project_chat';
       } catch {
-        return 'node';
+        return 'project_chat';
       }
     }
-    return 'node';
+    return 'project_chat';
   });
   
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -42,8 +44,10 @@ const Workspace = () => {
     return savedTheme || 'dark';
   });
   
-  const [leftWidth, setLeftWidth] = useState(260);
-  const [rightWidth, setRightWidth] = useState(460); 
+  const [leftWidth, setLeftWidth] = useState(280);
+  const [rightWidth, setRightWidth] = useState(350); 
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
@@ -169,7 +173,7 @@ const Workspace = () => {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (isResizingLeft.current) setLeftWidth(Math.max(220, Math.min(400, e.clientX)));
-      if (isResizingRight.current) setRightWidth(Math.max(380, Math.min(700, window.innerWidth - e.clientX)));
+      if (isResizingRight.current) setRightWidth(Math.max(300, Math.min(700, window.innerWidth - e.clientX)));
     };
     const onUp = () => { isResizingLeft.current = false; isResizingRight.current = false; };
     window.addEventListener('mousemove', onMove);
@@ -196,23 +200,19 @@ const Workspace = () => {
     navigate(`/workspace?project=${activeProject.id}&deliverable=${id}`, { replace: true });
   };
 
-  const handleViewModeChange = (mode: 'chat' | 'node') => {
+  const handleViewModeChange = (mode: 'project_chat' | 'global_chat') => {
     setViewMode(mode);
   };
 
-  const deptBgClass = useMemo(() => {
-    const code = activeDeliverable?.code || '';
-    if (code.startsWith('CSA')) return 'bg-dept-csa';
-    if (code.startsWith('ELEC')) return 'bg-dept-elec';
-    if (code.startsWith('MECH')) return 'bg-dept-mech';
-    if (code.startsWith('INST')) return 'bg-dept-inst';
-    return 'bg-dot-grid';
-  }, [activeDeliverable]);
+  // Get user's department for background theming
+  const userDepartment = user?.department;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-300 font-inter">
       <Sidebar 
-        width={leftWidth}
+        width={isLeftCollapsed ? 50 : leftWidth}
+        isCollapsed={isLeftCollapsed}
+        onToggleCollapse={() => setIsLeftCollapsed(!isLeftCollapsed)}
         activeProject={activeProject}
         onProjectSelect={handleProjectSelect}
         deliverables={currentDeliverables}
@@ -226,27 +226,35 @@ const Workspace = () => {
       />
 
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[var(--bg-base)]">
-        {viewMode !== 'chat' && <WorkspaceHeader deliverable={activeDeliverable} />}
+        {/* We keep WorkspaceHeader only for context, but it might be hidden if not in a "node" like mode */}
+        {/* For now, let's show it if we have an active deliverable */}
+        {activeDeliverable && <WorkspaceHeader deliverable={activeDeliverable} />}
+        
         <Suspense fallback={<LoadingView />}>
-          {viewMode === 'chat' ? (
-            <ChatView backgroundClass={deptBgClass} />
-          ) : (
-            <NodeContextView 
-              activeNodeId={activeNodeId || ''} 
-              activeDeliverableCode={activeDeliverable?.code || 'N/A'} 
-              backgroundClass={deptBgClass}
-            />
-          )}
+          <ChatView 
+            department={userDepartment}
+            viewMode={viewMode}
+            onViewModeSelect={handleViewModeChange}
+            projectId={activeProject.id}
+            userId={user?.id || ''}
+          />
         </Suspense>
       </main>
 
       <RightSidebar 
-        width={rightWidth}
+        width={isRightCollapsed ? 50 : rightWidth}
+        isCollapsed={isRightCollapsed}
+        onToggleCollapse={() => setIsRightCollapsed(!isRightCollapsed)}
         activeDeliverable={activeDeliverable}
         nodes={currentNodes}
         activeNodeId={activeNodeId}
         onNodeSelect={setActiveNodeId}
         onResizeStart={() => isResizingRight.current = true}
+        // Project Tree Props
+        projects={projects}
+        activeProject={activeProject}
+        onProjectSelect={handleProjectSelect}
+        onDeliverableSelect={handleDeliverableSelect}
       />
     </div>
   );

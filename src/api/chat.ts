@@ -2,82 +2,72 @@
  * Chat API utilities for Project Intelligence queries
  */
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+import { ConversationHistoryItem } from '../lib/supabase';
+
+// Get Chat API URL from environment variable
+const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8000';
 
 export interface ChatResponse {
   message: string;
   error?: string;
 }
 
-const API_ENDPOINT = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+export interface ProjectChatPayload {
+  participant_id: string;
+  message: string;
+  conversation_history: ConversationHistoryItem[];
+  project_id: string;
+  enable_tools: boolean;
+}
 
-// Get Gemini API key from environment (defined in vite.config.ts)
-const getGeminiApiKey = () => {
-  // @ts-ignore - process.env is defined via vite.config.ts define
-  return typeof process !== 'undefined' && process.env?.GEMINI_API_KEY 
-    ? process.env.GEMINI_API_KEY 
-    : undefined;
-};
+export interface GlobalChatPayload {
+  message: string;
+  conversation_history: ConversationHistoryItem[];
+  project_id: string;
+}
 
 /**
- * Send a query to the AI chat endpoint
+ * Send a query to the Project Chat endpoint
+ * Requires a valid participant_id from the participants table
  */
-export async function sendChatQuery(query: string): Promise<ChatResponse> {
+export async function sendProjectChatQuery(
+  participantId: string,
+  message: string,
+  conversationHistory: ConversationHistoryItem[],
+  projectId: string,
+  enableTools: boolean = true
+): Promise<ChatResponse> {
+  const endpoint = `${CHAT_API_URL}/chat`;
+  
   try {
-    const GEMINI_API_KEY = getGeminiApiKey();
-    
-    // If Gemini API key is available, use it directly
-    if (GEMINI_API_KEY) {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are an AI assistant for an EPCM (Engineering, Procurement, Construction, and Management) system. 
-                Answer the following technical project query: ${query}`
-              }]
-            }]
-          }),
-        }
-      );
+    const payload: ProjectChatPayload = {
+      participant_id: participantId,
+      message,
+      conversation_history: conversationHistory,
+      project_id: projectId,
+      enable_tools: enableTools,
+    };
 
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
-      }
+    console.log('Project Chat API Request:', { endpoint, payload });
 
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-      
-      return { message: text };
-    }
-
-    // Fallback to backend API endpoint
-    const response = await fetch(`${API_ENDPOINT}/chat`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Project Chat API Error Response:', { status: response.status, statusText: response.statusText, body: errorText });
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     return { message: data.message || data.response || 'No response received.' };
   } catch (error) {
-    console.error('Chat API error:', error);
+    console.error('Project Chat API error:', error);
     return {
       message: '',
       error: error instanceof Error ? error.message : 'Failed to process query. Please try again.',
@@ -85,3 +75,47 @@ export async function sendChatQuery(query: string): Promise<ChatResponse> {
   }
 }
 
+/**
+ * Send a query to the Global Chat endpoint
+ * Does NOT require participant_id
+ */
+export async function sendGlobalChatQuery(
+  message: string,
+  conversationHistory: ConversationHistoryItem[],
+  projectId: string
+): Promise<ChatResponse> {
+  const endpoint = `${CHAT_API_URL}/chat/universal`;
+  
+  try {
+    const payload: GlobalChatPayload = {
+      message,
+      conversation_history: conversationHistory,
+      project_id: projectId,
+    };
+
+    console.log('Global Chat API Request:', { endpoint, payload });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Global Chat API Error Response:', { status: response.status, statusText: response.statusText, body: errorText });
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { message: data.message || data.response || 'No response received.' };
+  } catch (error) {
+    console.error('Global Chat API error:', error);
+    return {
+      message: '',
+      error: error instanceof Error ? error.message : 'Failed to process query. Please try again.',
+    };
+  }
+}

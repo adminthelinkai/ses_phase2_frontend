@@ -1,13 +1,33 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projects, Project } from '../../data';
+import { useAuth } from '../../context/AuthContext';
 
 const Home = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('epcm-theme') as 'dark' | 'light';
@@ -60,12 +80,40 @@ const Home = () => {
               )}
             </button>
             <div className="h-6 w-px bg-[var(--border-color)]"></div>
-            <div className="flex items-center gap-3">
-               <div className="text-right hidden sm:block">
-                  <div className="text-[9px] font-black text-[var(--text-primary)] uppercase">John Doe</div>
-                  <div className="text-[7px] font-bold text-[var(--accent-blue)] tracking-widest uppercase">Lead Coordinator</div>
-               </div>
-               <div className="w-8 h-8 rounded-full border border-[var(--border-color)] bg-[var(--bg-panel)] flex items-center justify-center text-[9px] font-black text-[var(--accent-blue)] shadow-sm">JD</div>
+            <div className="relative" ref={profileMenuRef}>
+              <div 
+                className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+              >
+                <div className="text-right hidden sm:block">
+                  <div className="text-[9px] font-black text-[var(--text-primary)] uppercase">{user?.name || 'User'}</div>
+                  <div className="text-[7px] font-bold text-[var(--accent-blue)] tracking-widest uppercase">{user?.role || 'Member'}</div>
+                </div>
+                <div className="w-8 h-8 rounded-full border border-[var(--border-color)] bg-[var(--bg-panel)] flex items-center justify-center text-[9px] font-black text-[var(--accent-blue)] shadow-sm">
+                  {user?.name?.slice(0, 2).toUpperCase() || 'U'}
+                </div>
+              </div>
+
+              {/* Profile Dropdown Menu */}
+              {showProfileMenu && (
+                <div className="absolute right-0 top-12 w-56 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                  <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-sidebar)]">
+                    <div className="text-[10px] font-black text-[var(--text-primary)] uppercase">{user?.name || 'User'}</div>
+                    <div className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{user?.department} • {user?.role}</div>
+                  </div>
+                  <div className="p-2">
+                    <button 
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-rose-500/10 transition-colors group"
+                    >
+                      <svg className="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-rose-500 group-hover:text-rose-400">Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

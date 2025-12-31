@@ -1,49 +1,54 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
+import { NodeItem } from '../../data';
+import { Department } from '../../types';
+
+// Lazy load the DepartmentBackgroundProvider
+const DepartmentBackgroundProvider = lazy(() => import('../../components/backgrounds/DepartmentBackgroundProvider'));
 
 interface NodeContextViewProps {
   activeNodeId: string;
   activeDeliverableCode: string;
-  backgroundClass?: string;
+  department?: Department;
+  viewMode: 'project_chat' | 'global_chat';
+  onViewModeSelect: (mode: 'project_chat' | 'global_chat') => void;
+  nodes: NodeItem[];
 }
 
-const NodeContextView: React.FC<NodeContextViewProps> = ({ activeNodeId, activeDeliverableCode, backgroundClass = 'bg-dot-grid' }) => {
-  const nodes = [
-    { id: 'geometrysplit', name: 'GEOMETRY SPLIT', status: 'completed', type: 'split' },
-    { id: 'materialspec', name: 'MATERIAL SPEC', status: 'completed', type: 'doc' },
-    { id: 'interimreview', name: 'INTERIM REVIEW', status: 'in_progress', type: 'form' },
-    { id: 'electricalreview', name: 'ELECTRICAL REVIEW', status: 'blocked', type: 'approval' },
-    { id: 'finalapproval', name: 'FINAL APPROVAL', status: 'pending', type: 'approval' },
-    { id: 'diagram', name: 'SLD FINALISATION', status: 'completed', type: 'doc' },
-    { id: 'loadcalc', name: 'LOAD SCHEDULE', status: 'in_progress', type: 'calc' },
-    { id: 'datasheet', name: 'PROCESS DATASHEET', status: 'completed', type: 'doc' },
-    { id: 'loopdiag', name: 'LOOP DIAGRAM', status: 'completed', type: 'doc' }
-  ];
+// Loading fallback for background
+const BackgroundFallback = () => (
+  <div className="absolute inset-0 bg-dot-grid opacity-30 pointer-events-none" />
+);
+
+const NodeContextView: React.FC<NodeContextViewProps> = ({ 
+  activeNodeId, 
+  activeDeliverableCode, 
+  department,
+  viewMode,
+  onViewModeSelect,
+  nodes
+}) => {
 
   const activeNode = nodes.find(n => n.id === activeNodeId) || nodes[0];
 
+  // Handle case when no nodes are available
+  if (!activeNode) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="text-[var(--text-muted)] text-sm">No node selected</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto items-center py-10 relative transition-colors">
-      {/* Dynamic Technical Pattern Foundation */}
-      <div className={`absolute inset-0 ${backgroundClass} ${(backgroundClass === 'bg-bricks' || backgroundClass === 'bg-dept-csa') ? 'opacity-70' : 'opacity-40'} pointer-events-none transition-all duration-700`}></div>
-      
-      {/* Supplemental Subtle Overlay for CSA/Brick Pattern */}
-      {(backgroundClass === 'bg-bricks' || backgroundClass === 'bg-dept-csa') && (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_transparent_0%,_var(--bg-base)_90%)] opacity-50 pointer-events-none"></div>
-      )}
-      
-      {/* Scattered Detailed Blueprint Accents */}
-      <div className="crosshair top-16 right-[22%]"></div>
-      <div className="crosshair bottom-36 left-[18%]"></div>
-      <div className="crosshair top-[55%] left-[6%]"></div>
-      
-      <div className="dimension-tick top-[180px] left-[80px] opacity-40"></div>
-      <div className="dimension-tick bottom-[220px] right-[120px] opacity-40 rotate-180"></div>
-      
-      <div className="blueprint-mark w-10 h-10 top-12 left-[42%] opacity-30 border-t-2 border-l-2 border-[var(--accent-blue)]"></div>
-      
-      <div className="rebar-mark top-[12%] right-[8%]"></div>
-      <div className="rebar-mark bottom-[15%] left-[5%]"></div>
+      {/* Department-specific Background - Absolutely Positioned */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <Suspense fallback={<BackgroundFallback />}>
+          <DepartmentBackgroundProvider department={department} />
+        </Suspense>
+      </div>
 
+      {/* Main Content - Above Background */}
       <div className="relative z-10 w-full flex flex-col items-center">
         {/* NODE EXECUTION CARD */}
         <div className="w-full max-w-5xl px-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -110,6 +115,34 @@ const NodeContextView: React.FC<NodeContextViewProps> = ({ activeNodeId, activeD
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* VIEW MODE TOGGLE - Shared position with ChatView */}
+      <div className="mt-auto pb-10 pt-4 px-10 z-20 w-full">
+        <div className="max-w-4xl mx-auto flex justify-end">
+          <div className="bg-[var(--bg-panel)]/80 backdrop-blur-md border border-[var(--border-color)] rounded-full p-0.5 flex gap-0.5 shadow-lg">
+            <button 
+              onClick={() => onViewModeSelect('project_chat')}
+              className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'project_chat' 
+                  ? 'bg-[var(--accent-blue)] text-white shadow-md' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Project Chat
+            </button>
+            <button 
+              onClick={() => onViewModeSelect('global_chat')}
+              className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
+                viewMode === 'global_chat' 
+                  ? 'bg-[var(--accent-blue)] text-white shadow-md' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Global Chat
+            </button>
           </div>
         </div>
       </div>

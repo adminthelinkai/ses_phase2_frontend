@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 
-interface LoginProps {
-  onLogin: (username: string) => void;
-}
-
-// Hardcoded credentials
-const VALID_EMAIL = 'info@thelinkai.com';
-const VALID_PASSWORD = 'admin@123';
-
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
+const Login: React.FC = () => {
+  const { login, isLoading } = useAuth();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -25,27 +18,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     localStorage.setItem('epcm-theme', theme);
   }, [theme]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
-    // Validate credentials
-    if (username.trim().toLowerCase() !== VALID_EMAIL.toLowerCase()) {
-      setError('Invalid email address');
-      return;
-    }
+    const result = await login(email, password);
     
-    if (password !== VALID_PASSWORD) {
-      setError('Invalid password');
-      return;
+    if (!result.success && result.error) {
+      setError(result.error);
     }
-    
-    setIsAuthenticating(true);
-    // Simulate API delay
-    setTimeout(() => {
-      onLogin(username);
-      setIsAuthenticating(false);
-    }, 1200);
   };
 
   return (
@@ -83,8 +64,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <input 
                     type="email"
                     required
-                    value={username}
-                    onChange={(e) => { setUsername(e.target.value); setError(''); }}
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setError(''); }}
                     placeholder="EMAIL_ADDRESS"
                     className="w-full border border-[var(--border-color)] rounded-xl py-3.5 pl-12 pr-4 text-xs font-mono font-bold placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 ring-[var(--accent-blue)]/30 focus:border-[var(--accent-blue)] transition-all input-text-visible"
                     style={{ 
@@ -128,13 +109,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <button 
                 type="submit"
-                disabled={isAuthenticating}
+                disabled={isLoading}
                 className="w-full h-12 bg-[var(--accent-blue)] text-white rounded-xl font-black text-[10px] tracking-[0.3em] uppercase shadow-[0_8px_20px_rgba(31,93,142,0.3)] hover:brightness-110 active:scale-[0.98] transition-all relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isAuthenticating ? (
+                {isLoading ? (
                   <div className="flex items-center justify-center gap-3">
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                    <span>SYNCING...</span>
+                    <span>AUTHENTICATING...</span>
                   </div>
                 ) : (
                   <>
@@ -146,7 +127,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </form>
 
             <div className="pt-6 border-t border-[var(--border-color)] flex justify-between items-center opacity-60">
-              <span className="text-[8px] font-black text-[var(--text-muted)] uppercase tracking-widest leading-none">Status: Restricted Access</span>
+              <span className="text-[8px] font-black text-[var(--text-muted)] uppercase tracking-widest leading-none">Status: Secure Connection</span>
               <button 
                 type="button"
                 onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
@@ -160,7 +141,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <p className="mt-12 text-center text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-[0.4em] leading-relaxed opacity-50">
           Proprietary Intelligence Core // Secure Terminal v2.6.0<br/>
-          Authorization managed by Central SES Administration.
+          Authorization managed by Supabase Authentication.
         </p>
       </div>
 

@@ -1,16 +1,27 @@
-import React from 'react';
-import { NodeItem, DeliverableItem } from '../../data';
+import React, { useState, lazy, Suspense } from 'react';
+import { NodeItem, DeliverableItem, Project } from '../../data';
+
+// Lazy load the ProjectTreeView component for code splitting
+const ProjectTreeView = lazy(() => import('./ProjectTreeView'));
 
 interface RightSidebarProps {
   width: number;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
   activeDeliverable?: DeliverableItem;
   nodes: NodeItem[];
   activeNodeId: string | null;
   onNodeSelect: (id: string) => void;
   onResizeStart: (e: React.MouseEvent) => void;
+  // New props for project tree
+  projects: Project[];
+  activeProject: Project;
+  onProjectSelect: (project: Project) => void;
+  onDeliverableSelect: (deliverableId: string) => void;
 }
 
 const RightSidebar: React.FC<RightSidebarProps> = (props) => {
+  const [viewMode, setViewMode] = useState<'project' | 'deliverable'>('deliverable');
   const completedCount = props.nodes.filter(n => n.status === 'completed').length;
   const progressPercent = props.nodes.length > 0 ? (completedCount / props.nodes.length) * 100 : 0;
 
@@ -22,65 +33,216 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   ];
 
   return (
-    <aside style={{ width: props.width }} className="bg-[var(--bg-sidebar)] border-l border-[var(--border-color)] flex flex-col relative shrink-0">
-      <div onMouseDown={props.onResizeStart} className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent-blue)] transition-colors group z-50">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-8 bg-[var(--border-color)] group-hover:bg-[var(--accent-blue)] rounded-full"></div>
+    <aside style={{ width: props.width }} className="bg-[var(--bg-sidebar)] border-l border-[var(--border-color)] flex flex-col relative shrink-0 transition-all duration-300">
+      {!props.isCollapsed && (
+      <div onMouseDown={props.onResizeStart} className="absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize hover:bg-[var(--accent-blue)]/10 transition-colors group z-50 flex justify-center">
+        <div className="w-0.5 h-full bg-transparent group-hover:bg-[var(--accent-blue)] transition-colors relative">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-10 bg-[var(--border-color)] group-hover:bg-[var(--accent-blue)] rounded-full shadow-sm"></div>
+        </div>
       </div>
+      )}
       
-      <div className="h-20 border-b border-[var(--border-color)] flex items-center px-11 shrink-0 relative">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-[var(--accent-blue)] tracking-[0.3em] uppercase mb-1">STAGE: {props.activeDeliverable?.code || '---'}</span>
-          <h2 className="text-[17px] font-black uppercase tracking-tight text-[var(--text-primary)]">{props.activeDeliverable?.name || 'Deliverable'}</h2>
+      {!props.isCollapsed ? (
+        <>
+      <div className="h-20 border-b border-[var(--border-color)] flex items-center px-8 shrink-0 relative bg-[var(--bg-panel)]/40 backdrop-blur-sm overflow-hidden">
+        {/* Technical Header Decoration */}
+        <div className="absolute top-0 right-0 w-16 h-16 opacity-5 border-t-2 border-r-2 border-[var(--accent-blue)] pointer-events-none"></div>
+        <div className="absolute top-4 left-0 w-1 h-8 bg-[var(--accent-blue)] opacity-40"></div>
+        
+        <div className="flex flex-col relative z-10 w-full">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)] animate-pulse"></div>
+              <span className="text-[8px] font-black text-[var(--text-muted)] tracking-[0.4em] uppercase">
+                {viewMode === 'deliverable' ? 'Operational Context' : 'Structural Hierarchy'}
+              </span>
+            </div>
+            
+            {/* View Toggle Buttons */}
+            <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)]">
+              <button 
+                onClick={() => setViewMode('project')}
+                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === 'project' 
+                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Project
+              </button>
+              <button 
+                onClick={() => setViewMode('deliverable')}
+                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === 'deliverable' 
+                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Deliv
+              </button>
+            </div>
+          </div>
+          <h2 className="text-[15px] font-black uppercase tracking-tight text-[var(--text-primary)] leading-tight truncate">
+            {viewMode === 'deliverable' 
+              ? (props.activeDeliverable?.name || 'SELECT DELIVERABLE')
+              : props.activeProject.name}
+          </h2>
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto px-11 pb-12 pt-8 relative scrollbar-hide">
-        <div className="relative space-y-7">
-          <div className="absolute left-[4.5px] top-[-40px] bottom-0 w-[1px] bg-[var(--border-color)] opacity-60"></div>
-          {props.nodes.map((node, i) => {
-            const isActive = props.activeNodeId === node.id;
-            return (
-              <div key={node.id} className="relative pl-12">
-                <div className={`absolute left-[-0.5px] top-[24px] w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-sidebar)] z-20 transition-all translate-x-[-50%] ${isActive ? 'bg-[var(--accent-blue)] scale-125 shadow-[0_0_12px_var(--accent-blue)]' : node.status === 'completed' ? 'bg-emerald-500 opacity-60' : node.status === 'blocked' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]' : 'bg-[var(--border-color)]'}`}></div>
-                <div className="flex items-start">
-                  <div onClick={() => props.onNodeSelect(node.id)} className={`w-64 rounded-xl border p-4 transition-all cursor-pointer relative z-30 ${isActive ? 'bg-[var(--bg-panel)] border-[var(--accent-blue)] shadow-lg scale-[1.02]' : 'bg-[var(--bg-panel)] border-[var(--border-color)] opacity-80 hover:opacity-100 hover:-translate-y-0.5'}`}>
-                    <div className="text-[7px] font-mono font-black uppercase tracking-[0.25em] mb-2 text-[var(--text-muted)]">Node_0{i+1}</div>
-                    <div className={`text-[11.5px] font-black uppercase tracking-tight ${isActive ? 'text-[var(--text-primary)] translate-x-1.5' : 'text-[var(--text-secondary)]'} transition-all`}>{node.name}</div>
-                  </div>
-                  {isActive && (
-                    <div className="flex items-center ml-4 animate-in fade-in slide-in-from-left-4">
-                      <div className="w-8 h-px bg-[var(--accent-blue)]/40"></div>
-                      <div className="flex flex-col gap-2.5 pl-5 border-l border-[var(--accent-blue)]/20">
-                        {commands.map(cmd => (
-                          <div key={cmd.id} className="group/sat flex items-center">
-                            <button className="w-8 h-8 rounded-full bg-[var(--bg-panel)] border border-[var(--border-color)] flex items-center justify-center transition-all hover:scale-110" style={{ color: cmd.color } as any}>
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">{cmd.icon}</svg>
-                            </button>
-                            <span className="ml-3 text-[8px] font-black uppercase tracking-widest opacity-0 group-hover/sat:opacity-100 transition-opacity text-[var(--text-primary)] whitespace-nowrap">{cmd.label}</span>
+      <div className="flex-1 overflow-hidden relative">
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
+          {viewMode === 'project' ? (
+            <ProjectTreeView 
+              projects={props.projects}
+              activeProject={props.activeProject}
+              onProjectSelect={props.onProjectSelect}
+              onDeliverableSelect={(id) => {
+                props.onDeliverableSelect(id);
+                setViewMode('deliverable');
+              }}
+            />
+          ) : (
+            <div className="h-full overflow-y-auto px-10 pb-12 pt-8 relative scrollbar-hide">
+              <div className="relative">
+                {/* Technical Vertical Axis */}
+                <div className="absolute left-[7px] top-0 bottom-0 w-px bg-[var(--text-muted)] opacity-40 z-0"></div>
+                
+                <div className="space-y-12">
+                  {props.nodes.map((node, i) => {
+                    const isActive = props.activeNodeId === node.id;
+                    const isCompleted = node.status === 'completed';
+                    
+                    return (
+                      <div key={node.id} className="relative pl-12 group">
+                        {/* Technical Node Marker */}
+                        <div className={`absolute left-[0px] top-[14px] w-[15px] h-[15px] z-20 transition-all duration-500 flex items-center justify-center bg-[var(--bg-sidebar)]`}>
+                          <div className={`w-full h-full border-2 transition-all duration-500 ${
+                            isActive 
+                              ? 'border-[var(--accent-blue)] rotate-45 scale-110 shadow-[0_0_10px_var(--accent-blue)]' 
+                              : isCompleted
+                              ? 'border-[var(--text-muted)] scale-90 opacity-100'
+                              : 'border-[var(--text-muted)] scale-75 opacity-60'
+                          }`}></div>
+                          {isActive && <div className="absolute w-1 h-1 bg-[var(--accent-blue)] animate-pulse"></div>}
+                        </div>
+                
+                        <div className="flex flex-col items-start gap-3">
+                          {/* Redesigned Engineering Node Card */}
+                          <div 
+                            onClick={() => props.onNodeSelect(node.id)} 
+                            className={`w-[220px] h-[64px] transition-all cursor-pointer relative z-30 flex-shrink-0 flex flex-col justify-center px-5 border-l-[3px] backdrop-blur-md shadow-sm ${
+                              isActive 
+                                ? 'bg-[var(--accent-blue)]/5 border-[var(--accent-blue)] shadow-[20px_0_40px_-15px_rgba(31,93,142,0.15)] translate-x-1' 
+                                : isCompleted
+                                ? 'bg-[var(--text-muted)]/10 border-[var(--text-muted)]/30 hover:border-[var(--text-muted)]/50'
+                                : 'bg-white/5 border-[var(--text-muted)]/20 opacity-100 hover:border-[var(--text-muted)]/40'
+                            }`}
+                          >
+                            {/* Technical Corners */}
+                            {isActive && (
+                              <>
+                                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[var(--accent-blue)]/40"></div>
+                                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[var(--accent-blue)]/40"></div>
+                              </>
+                            )}
+
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[7px] font-mono font-bold tracking-[0.3em] uppercase ${
+                                isActive ? 'text-[var(--accent-blue)]' : 'text-[var(--text-primary)] opacity-60'
+                              }`}>
+                                S-{i+1 < 10 ? `0${i+1}` : i+1}
+                              </span>
+                              {isCompleted && (
+                                <div className="text-[6px] font-mono text-[var(--accent-blue)]/60 tracking-widest uppercase italic font-black">Verified</div>
+                              )}
+                            </div>
+                      
+                            <h3 className={`text-[10px] font-black uppercase tracking-widest transition-all ${
+                              isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
+                            }`}>
+                              {node.name}
+                            </h3>
+                            
+                            {/* Subtle status line for inactive nodes */}
+                            {!isActive && (
+                              <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-[var(--text-muted)]/20 via-transparent to-transparent"></div>
+                            )}
                           </div>
-                        ))}
+                        
+                          {/* Compact Command Actions - Positioned BELOW */}
+                          {isActive && (
+                            <div className="flex gap-2 pl-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                              {commands.map(cmd => (
+                                <button 
+                                  key={cmd.id}
+                                  className="w-8 h-8 rounded-none border border-[var(--text-muted)]/30 flex items-center justify-center transition-all hover:bg-[var(--accent-blue)] hover:border-[var(--accent-blue)] hover:text-white text-[var(--text-secondary)] group/btn relative"
+                                  title={cmd.label}
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{cmd.icon}</svg>
+                                  <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-[6px] font-black uppercase tracking-widest opacity-0 group-hover/btn:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
+                                    {cmd.label}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
+        </Suspense>
       </div>
 
-      <div className="mt-auto border-t border-[var(--border-color)] p-6 flex flex-col gap-3.5">
-        <div className="flex justify-between items-end px-1">
+      <div className="mt-auto border-t border-[var(--border-color)] p-6 flex flex-col gap-4 bg-[var(--bg-panel)]/30 backdrop-blur-md">
+        <div className="flex justify-between items-end">
+          <div className="flex flex-col">
+            <span className="text-[7px] font-mono text-[var(--accent-blue)] tracking-[0.3em] uppercase mb-1">System Sync</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-16px font-black text-[var(--text-primary)]">{Math.round(progressPercent)}.0%</span>
-            <span className="text-[7px] font-black uppercase tracking-widest text-[var(--accent-blue)]">Sync</span>
+              <span className="text-2xl font-black text-[var(--text-primary)] tracking-tighter">{Math.round(progressPercent)}.0%</span>
+            </div>
           </div>
-          <span className="text-[10px] font-mono text-[var(--text-muted)]">{completedCount}/{props.nodes.length} Stages</span>
+          <div className="text-right">
+            <div className="text-[7px] font-mono text-[var(--text-muted)] tracking-widest uppercase mb-1">Nodes</div>
+            <span className="text-[10px] font-bold text-[var(--text-primary)]">{completedCount} <span className="opacity-30">/</span> {props.nodes.length}</span>
+          </div>
         </div>
-        <div className="h-1.5 w-full bg-[var(--bg-panel)] rounded-full overflow-hidden border border-[var(--border-color)]/30">
-          <div className="h-full bg-[var(--accent-blue)] transition-all duration-1000" style={{ width: `${progressPercent}%` }}></div>
+        <div className="h-[2px] w-full bg-[var(--border-color)] relative overflow-hidden">
+          <div 
+            className="h-full bg-[var(--accent-blue)] transition-all duration-1000 shadow-[0_0_8px_rgba(31,93,142,0.4)]" 
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
       </div>
+      </>
+      ) : (
+        <div className="flex flex-col items-center py-4">
+          <div className="text-[8px] font-mono text-[var(--text-muted)] tracking-widest writing-mode-vertical transform rotate-180">STAGES</div>
+        </div>
+      )}
+
+      {/* Collapse/Expand Toggle Button */}
+      <button
+        onClick={props.onToggleCollapse}
+        className="absolute -left-4 top-1/2 -translate-y-1/2 w-8 h-16 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-l-xl hover:bg-[var(--accent-blue)] hover:border-[var(--accent-blue)] transition-all duration-300 z-50 flex items-center justify-center group shadow-lg cursor-pointer"
+      >
+        <svg 
+          className={`w-4 h-4 text-[var(--text-muted)] group-hover:text-white transition-all duration-300 ${props.isCollapsed ? '' : 'rotate-180'}`} 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
     </aside>
   );
 };

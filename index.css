@@ -10,8 +10,19 @@
     --text-muted: #475569;
     --accent-blue: #1f5d8e;
     --accent-glow: rgba(31, 93, 142, 0.4);
+    --bg-sidebar: #0d1117;
     --grid-line: rgba(255, 255, 255, 0.04);
     --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    
+    /* Department-specific accent colors */
+    --accent-pm: #6366f1;          /* Indigo - Project Management */
+    --accent-csa: #1f5d8e;         /* Blue - Civil/Structural */
+    --accent-elec: #f59e0b;        /* Amber - Electrical */
+    --accent-mech: #ef4444;        /* Red - Mechanical */
+    --accent-process: #10b981;     /* Emerald - Process */
+    --accent-instrument: #8b5cf6;  /* Violet - Instrument */
+    --accent-admin: #06b6d4;       /* Cyan - Admin */
+    --accent-mgmt: #64748b;        /* Slate - Management */
 }
 
 [data-theme='light'] {
@@ -24,8 +35,19 @@
     --text-muted: #64748b;
     --accent-blue: #1e5b8b;
     --accent-glow: rgba(30, 91, 139, 0.08);
+    --bg-sidebar: #ffffff;
     --grid-line: rgba(30, 91, 139, 0.05);
     --card-shadow: 0 10px 30px -5px rgba(30, 91, 139, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    
+    /* Department-specific accent colors - Light Mode */
+    --accent-pm: #4f46e5;          /* Indigo - Project Management */
+    --accent-csa: #1e5b8b;         /* Blue - Civil/Structural */
+    --accent-elec: #d97706;        /* Amber - Electrical */
+    --accent-mech: #dc2626;        /* Red - Mechanical */
+    --accent-process: #059669;     /* Emerald - Process */
+    --accent-instrument: #7c3aed;  /* Violet - Instrument */
+    --accent-admin: #0891b2;       /* Cyan - Admin */
+    --accent-mgmt: #475569;        /* Slate - Management */
 }
 
 body {
@@ -101,6 +123,89 @@ body {
         repeating-linear-gradient(0deg, transparent, transparent 9px, var(--grid-line) 9px, var(--grid-line) 10px),
         repeating-linear-gradient(90deg, transparent, transparent 9px, var(--grid-line) 9px, var(--grid-line) 10px);
     background-size: 10px 10px;
+}
+
+/* ========================================
+   DEPARTMENT BACKGROUND PATTERNS
+   ======================================== */
+
+/* Project Management - Blueprint Grid with Timeline */
+.bg-pm-grid {
+    background-image: 
+        linear-gradient(to right, rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(to right, rgba(99, 102, 241, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99, 102, 241, 0.06) 1px, transparent 1px);
+    background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+}
+
+/* CSA - Brick/Structural Pattern */
+.bg-csa-bricks {
+    background-image: 
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 19px,
+            rgba(31, 93, 142, 0.08) 19px,
+            rgba(31, 93, 142, 0.08) 20px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 39px,
+            rgba(31, 93, 142, 0.08) 39px,
+            rgba(31, 93, 142, 0.08) 40px
+        );
+    background-size: 40px 20px;
+}
+
+/* Electrical - Circuit Board Pattern */
+.bg-electrical-circuit {
+    background-image: 
+        repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(245, 158, 11, 0.04) 2px, rgba(245, 158, 11, 0.04) 4px),
+        repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(245, 158, 11, 0.04) 2px, rgba(245, 158, 11, 0.04) 4px),
+        radial-gradient(circle at 50% 50%, rgba(245, 158, 11, 0.06) 1px, transparent 1px);
+    background-size: 24px 24px, 24px 24px, 48px 48px;
+}
+
+/* Mechanical - Gear/Dot Pattern */
+.bg-mechanical-grid {
+    background-image: 
+        radial-gradient(circle at 2px 2px, rgba(239, 68, 68, 0.06) 2px, transparent 0),
+        radial-gradient(circle at 14px 14px, rgba(239, 68, 68, 0.03) 1px, transparent 0);
+    background-size: 28px 28px;
+}
+
+/* Process - Flow/Pipe Pattern */
+.bg-process-flow {
+    background-image: 
+        linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 2px, transparent 2px);
+    background-size: 40px 40px, 40px 40px, 80px 80px;
+}
+
+/* Instrument - Fine Grid/Wave Pattern */
+.bg-instrument-grid {
+    background-image: 
+        repeating-linear-gradient(0deg, transparent, transparent 7px, rgba(139, 92, 246, 0.04) 7px, rgba(139, 92, 246, 0.04) 8px),
+        repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(139, 92, 246, 0.04) 7px, rgba(139, 92, 246, 0.04) 8px);
+    background-size: 8px 8px;
+}
+
+/* Admin - Hexagon Tech Pattern */
+.bg-admin-hex {
+    background-image: 
+        radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.05) 2px, transparent 2px),
+        linear-gradient(60deg, transparent 25%, rgba(6, 182, 212, 0.02) 25%, rgba(6, 182, 212, 0.02) 75%, transparent 75%),
+        linear-gradient(-60deg, transparent 25%, rgba(6, 182, 212, 0.02) 25%, rgba(6, 182, 212, 0.02) 75%, transparent 75%);
+    background-size: 40px 40px, 60px 35px, 60px 35px;
+}
+
+/* Management - Clean Minimal Dots */
+.bg-management-dots {
+    background-image: radial-gradient(circle at 50% 50%, rgba(100, 116, 139, 0.08) 1.5px, transparent 1.5px);
+    background-size: 32px 32px;
 }
 
 .font-mono { 

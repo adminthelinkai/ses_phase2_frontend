@@ -1,6 +1,6 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthState, Role, Department } from '../types';
+import { AuthProvider, useAuth } from '../context/AuthContext';
 
 const Home = lazy(() => import('../modules/home/Home'));
 const Workspace = lazy(() => import('../modules/workspace/Workspace'));
@@ -15,71 +15,79 @@ const LoadingView = () => (
   </div>
 );
 
-const AUTH_STORAGE_KEY = 'epcm-auth-state';
+// Protected Route component
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
 
-const App: React.FC = () => {
-  const [auth, setAuth] = useState<AuthState>(() => {
-    // Restore auth state from localStorage on mount
-    const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (savedAuth) {
-      try {
-        return JSON.parse(savedAuth);
-      } catch {
-        return { isAuthenticated: false, user: null };
-      }
-    }
-    return { isAuthenticated: false, user: null };
-  });
+  if (isLoading) {
+    return <LoadingView />;
+  }
 
-  // Persist auth state to localStorage whenever it changes
-  useEffect(() => {
-    if (auth.isAuthenticated && auth.user) {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
-    } else {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-  }, [auth]);
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
-  const handleLogin = (username: string) => {
-    // Simulated successful login
-    const newAuth: AuthState = {
-      isAuthenticated: true,
-      user: {
-        id: 'user-001',
-        name: username || 'John Doe',
-        department: Department.CSA,
-        role: Role.HOD,
-      },
-    };
-    setAuth(newAuth);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newAuth));
-  };
+  return <>{children}</>;
+};
 
-  const handleLogout = () => {
-    setAuth({ isAuthenticated: false, user: null });
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-  };
+// Public Route component (redirects to home if already authenticated)
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingView />;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const AppRoutes: React.FC = () => {
+  const { isAuthenticated } = useAuth();
 
   return (
+    <Routes>
+      <Route 
+        path="/login" 
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        } 
+      />
+      <Route 
+        path="/home" 
+        element={
+          <ProtectedRoute>
+            <Home />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/workspace" 
+        element={
+          <ProtectedRoute>
+            <Workspace />
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="/" element={<Navigate to={isAuthenticated ? "/home" : "/login"} replace />} />
+      <Route path="*" element={<Navigate to={isAuthenticated ? "/home" : "/login"} replace />} />
+    </Routes>
+  );
+};
+
+const App: React.FC = () => {
+  return (
     <BrowserRouter>
-      <Suspense fallback={<LoadingView />}>
-        <Routes>
-          <Route 
-            path="/login" 
-            element={auth.isAuthenticated ? <Navigate to="/home" replace /> : <Login onLogin={handleLogin} />} 
-          />
-          <Route 
-            path="/home" 
-            element={auth.isAuthenticated ? <Home /> : <Navigate to="/login" replace />} 
-          />
-          <Route 
-            path="/workspace" 
-            element={auth.isAuthenticated ? <Workspace /> : <Navigate to="/login" replace />} 
-          />
-          <Route path="/" element={<Navigate to={auth.isAuthenticated ? "/home" : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/home" : "/login"} replace />} />
-        </Routes>
-      </Suspense>
+      <AuthProvider>
+        <Suspense fallback={<LoadingView />}>
+          <AppRoutes />
+        </Suspense>
+      </AuthProvider>
     </BrowserRouter>
   );
 };
