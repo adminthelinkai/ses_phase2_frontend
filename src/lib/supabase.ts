@@ -103,6 +103,19 @@ export async function updateProjectChatSessionTimestamp(sessionId: string): Prom
     .eq('id', sessionId);
 }
 
+export async function updateProjectChatSessionTitle(sessionId: string, title: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_chat_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', sessionId);
+
+  if (error) {
+    console.error('Error updating project chat session title:', error);
+    return false;
+  }
+  return true;
+}
+
 // ============== PROJECT CHAT MESSAGES ==============
 
 export async function getProjectChatMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -205,6 +218,19 @@ export async function updateGlobalChatSessionTimestamp(sessionId: string): Promi
     .from('global_chat_sessions')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', sessionId);
+}
+
+export async function updateGlobalChatSessionTitle(sessionId: string, title: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('global_chat_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', sessionId);
+
+  if (error) {
+    console.error('Error updating global chat session title:', error);
+    return false;
+  }
+  return true;
 }
 
 // ============== GLOBAL CHAT MESSAGES ==============

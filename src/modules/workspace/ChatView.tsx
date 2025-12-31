@@ -18,6 +18,8 @@ import {
   buildConversationHistory,
   getParticipantByDepartment,
   getDefaultBackendProjectId,
+  updateProjectChatSessionTitle,
+  updateGlobalChatSessionTitle,
   Participant,
 } from '../../lib/supabase';
 
@@ -198,7 +200,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   }, [messages]);
 
   // Load sessions when viewMode or projectId changes
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (autoSelect: boolean = true) => {
     if (!userId || !projectId) return;
     
     setIsLoadingSessions(true);
@@ -209,8 +211,8 @@ const ChatView: React.FC<ChatViewProps> = ({
       
       setSessions(loadedSessions);
       
-      // Only auto-select first session if user hasn't explicitly started a new chat
-      if (loadedSessions.length > 0 && !activeSessionId && !isNewChatModeRef.current) {
+      // Only auto-select first session on initial load
+      if (autoSelect && loadedSessions.length > 0 && !isNewChatModeRef.current) {
         setActiveSessionId(loadedSessions[0].id);
       }
     } catch (err) {
@@ -218,7 +220,7 @@ const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [userId, projectId, viewMode, activeSessionId]);
+  }, [userId, projectId, viewMode]);
 
   useEffect(() => {
     loadSessions();
@@ -292,6 +294,22 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleEditSession = async (sessionId: string, newTitle: string) => {
+    try {
+      const success = viewMode === 'project_chat'
+        ? await updateProjectChatSessionTitle(sessionId, newTitle)
+        : await updateGlobalChatSessionTitle(sessionId, newTitle);
+
+      if (success) {
+        setSessions(prev => prev.map(s => 
+          s.id === sessionId ? { ...s, title: newTitle, updated_at: new Date().toISOString() } : s
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to edit session:', err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
@@ -302,12 +320,14 @@ const ChatView: React.FC<ChatViewProps> = ({
     setError(null);
     isSubmittingRef.current = true;
 
+    console.log('handleSubmit - activeSessionId:', activeSessionId, 'isNewChatMode:', isNewChatModeRef.current);
+
     try {
       let currentSessionId = activeSessionId;
-      const isNewSession = !currentSessionId;
 
       // If no active session, create one with the first message as title
       if (!currentSessionId) {
+        console.log('Creating new session with title:', userMessageContent.slice(0, 50));
         const title = userMessageContent.slice(0, 50) + (userMessageContent.length > 50 ? '...' : '');
         const newSession = viewMode === 'project_chat'
           ? await createProjectChatSession(userId, projectId, title)
@@ -317,10 +337,13 @@ const ChatView: React.FC<ChatViewProps> = ({
           throw new Error('Failed to create chat session');
         }
 
+        console.log('New session created:', newSession);
         currentSessionId = newSession.id;
         setActiveSessionId(currentSessionId);
         setSessions(prev => [newSession, ...prev]);
         isNewChatModeRef.current = false; // Session created, exit new chat mode
+      } else {
+        console.log('Using existing session:', currentSessionId);
       }
 
       // Save user message to database
@@ -403,6 +426,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             onSessionSelect={handleSessionSelect}
             onNewChat={handleNewChat}
             onDeleteSession={handleDeleteSession}
+            onEditSession={handleEditSession}
             isCollapsed={!isSessionPanelOpen}
             onToggleCollapse={() => setIsSessionPanelOpen(!isSessionPanelOpen)}
             isLoading={isLoadingSessions}

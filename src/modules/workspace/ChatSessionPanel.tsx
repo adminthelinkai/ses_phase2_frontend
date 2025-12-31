@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChatSession } from '../../lib/supabase';
 
 interface ChatSessionPanelProps {
@@ -7,6 +7,7 @@ interface ChatSessionPanelProps {
   onSessionSelect: (sessionId: string) => void;
   onNewChat: () => void;
   onDeleteSession: (sessionId: string) => void;
+  onEditSession: (sessionId: string, newTitle: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   isLoading: boolean;
@@ -19,6 +20,7 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
   onSessionSelect,
   onNewChat,
   onDeleteSession,
+  onEditSession,
   isCollapsed,
   onToggleCollapse,
   isLoading,
@@ -26,12 +28,50 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
 }) => {
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingSessionId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingSessionId]);
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     setDeletingSessionId(sessionId);
     await onDeleteSession(sessionId);
     setDeletingSessionId(null);
+  };
+
+  const handleEditClick = (e: React.MouseEvent, session: ChatSession) => {
+    e.stopPropagation();
+    setEditingSessionId(session.id);
+    setEditTitle(session.title || '');
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (editingSessionId && editTitle.trim()) {
+      onEditSession(editingSessionId, editTitle.trim());
+    }
+    setEditingSessionId(null);
+    setEditTitle('');
+  };
+
+  const handleEditCancel = () => {
+    setEditingSessionId(null);
+    setEditTitle('');
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      handleEditCancel();
+    }
   };
 
   // Format date for display
@@ -140,8 +180,8 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
               key={session.id}
               role="button"
               tabIndex={0}
-              onClick={() => onSessionSelect(session.id)}
-              onKeyDown={(e) => e.key === 'Enter' && onSessionSelect(session.id)}
+              onClick={() => editingSessionId !== session.id && onSessionSelect(session.id)}
+              onKeyDown={(e) => e.key === 'Enter' && editingSessionId !== session.id && onSessionSelect(session.id)}
               onMouseEnter={() => setHoveredSessionId(session.id)}
               onMouseLeave={() => setHoveredSessionId(null)}
               className={`w-full group relative p-3 rounded-xl text-left transition-all duration-200 cursor-pointer ${
@@ -152,34 +192,67 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium truncate ${
-                    activeSessionId === session.id 
-                      ? 'text-[var(--accent-blue)]' 
-                      : 'text-[var(--text-primary)]'
-                  }`}>
-                    {session.title || 'New Chat'}
-                  </p>
-                  <p className="text-[9px] text-[var(--text-muted)] mt-0.5">
-                    {formatDate(session.updated_at)}
-                  </p>
+                  {editingSessionId === session.id ? (
+                    // Edit mode
+                    <form onSubmit={handleEditSubmit} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        ref={editInputRef}
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={handleEditKeyDown}
+                        onBlur={handleEditCancel}
+                        className="w-full text-xs font-medium bg-[var(--bg-base)] border border-[var(--accent-blue)] rounded px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]"
+                        placeholder="Chat title..."
+                      />
+                    </form>
+                  ) : (
+                    // Display mode
+                    <>
+                      <p className={`text-xs font-medium truncate ${
+                        activeSessionId === session.id 
+                          ? 'text-[var(--accent-blue)]' 
+                          : 'text-[var(--text-primary)]'
+                      }`}>
+                        {session.title || 'New Chat'}
+                      </p>
+                      <p className="text-[9px] text-[var(--text-muted)] mt-0.5">
+                        {formatDate(session.updated_at)}
+                      </p>
+                    </>
+                  )}
                 </div>
 
-                {/* Delete button - show on hover */}
-                {(hoveredSessionId === session.id || deletingSessionId === session.id) && (
-                  <button
-                    onClick={(e) => handleDelete(e, session.id)}
-                    disabled={deletingSessionId === session.id}
-                    className="p-1 rounded-md hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400 transition-colors shrink-0"
-                    title="Delete chat"
-                  >
-                    {deletingSessionId === session.id ? (
-                      <div className="w-3.5 h-3.5 border-2 border-rose-400/30 border-t-rose-400 rounded-full animate-spin" />
-                    ) : (
+                {/* Action buttons - show on hover */}
+                {(hoveredSessionId === session.id || deletingSessionId === session.id) && editingSessionId !== session.id && (
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {/* Edit button */}
+                    <button
+                      onClick={(e) => handleEditClick(e, session)}
+                      className="p-1 rounded-md hover:bg-[var(--accent-blue)]/20 text-[var(--text-muted)] hover:text-[var(--accent-blue)] transition-colors"
+                      title="Edit title"
+                    >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
-                    )}
-                  </button>
+                    </button>
+                    
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => handleDelete(e, session.id)}
+                      disabled={deletingSessionId === session.id}
+                      className="p-1 rounded-md hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400 transition-colors"
+                      title="Delete chat"
+                    >
+                      {deletingSessionId === session.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-rose-400/30 border-t-rose-400 rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -191,4 +264,3 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
 };
 
 export default ChatSessionPanel;
-
