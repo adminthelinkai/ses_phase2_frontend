@@ -126,7 +126,7 @@ const ChatSessionPanel: React.FC<ChatSessionPanelProps> = ({
       <div className="p-3 border-b border-[var(--border-color)]">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            {viewMode === 'project_chat' ? 'Project Chats' : 'Global Chats'}
+            {viewMode === 'project_chat' ? 'Your Chats' : 'Global Chats'}
           </span>
           <button
             onClick={onToggleCollapse}

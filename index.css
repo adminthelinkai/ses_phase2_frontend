@@ -377,3 +377,15 @@ input:-webkit-autofill:active {
     box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.85) inset !important;
 }
 
+/* Pan/Zoom Canvas Hint Animation */
+@keyframes fade-hint {
+    0% { opacity: 0; }
+    10% { opacity: 0.9; }
+    30% { opacity: 0.9; }
+    100% { opacity: 0; }
+}
+
+.animate-fade-hint {
+    animation: fade-hint 4s ease-out forwards;
+}
+

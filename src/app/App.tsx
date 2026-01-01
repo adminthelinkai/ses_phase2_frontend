@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { ToastProvider } from '../components/Toast';
 
 const Home = lazy(() => import('../modules/home/Home'));
 const Workspace = lazy(() => import('../modules/workspace/Workspace'));
@@ -84,9 +85,11 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<LoadingView />}>
-          <AppRoutes />
-        </Suspense>
+        <ToastProvider>
+          <Suspense fallback={<LoadingView />}>
+            <AppRoutes />
+          </Suspense>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

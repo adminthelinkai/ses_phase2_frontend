@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import RightSidebar from './RightSidebar';
 import WorkspaceHeader from './WorkspaceHeader';
-import { projects, deliverablesMap, deliverableWorkflows, Project } from '../../data';
+import { projects as staticProjects, deliverablesMap, deliverableWorkflows, Project } from '../../data';
 import { useAuth } from '../../context/AuthContext';
+import { getAssignedProjects, BackendProject } from '../../lib/supabase';
+import type { CreatedProjectData } from '../projects/CreateProjectModal';
 
 const ChatView = lazy(() => import('./ChatView'));
 const NodeContextView = lazy(() => import('./NodeContextView'));
@@ -25,6 +27,74 @@ const Workspace = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  
+  // State for assigned projects
+  const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  
+  // State for newly created project (for 2-min delay on team assignment node)
+  const [newProjectData, setNewProjectData] = useState<{ id: string; createdAt: number } | null>(null);
+  
+  // Fetch assigned projects - extracted as callback for reuse after project creation
+  const fetchProjects = useCallback(async () => {
+    if (!user?.participantId) {
+      setAssignedProjects([]);
+      setIsLoadingProjects(false);
+      return;
+    }
+
+    setIsLoadingProjects(true);
+    try {
+      const backendProjects = await getAssignedProjects(user.participantId);
+      const projects: Project[] = backendProjects.map((p: BackendProject) => ({
+        id: p.project_id,
+        name: p.name,
+        status: (p.status?.toLowerCase() as 'active' | 'on-hold' | 'completed') || 'active',
+      }));
+      setAssignedProjects(projects);
+    } catch (error) {
+      console.error('Error fetching assigned projects:', error);
+      setAssignedProjects([]);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }, [user?.participantId]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  // Handle new project creation - refresh projects and navigate to it
+  const handleProjectCreated = useCallback(async (projectData: CreatedProjectData) => {
+    // Store new project data with timestamp for 2-min delay logic
+    setNewProjectData({
+      id: projectData.id,
+      createdAt: Date.now(),
+    });
+    
+    // Refresh projects list
+    await fetchProjects();
+    
+    // Navigate to the new project
+    const newProject: Project = {
+      id: projectData.id,
+      name: projectData.name,
+      status: 'active',
+    };
+    
+    // Add to assigned projects immediately and select it
+    setAssignedProjects(prev => {
+      // Check if already exists
+      if (prev.find(p => p.id === projectData.id)) {
+        return prev;
+      }
+      return [newProject, ...prev];
+    });
+    
+    // Select the new project
+    handleProjectSelect(newProject);
+  }, [fetchProjects]);
   
   const [viewMode, setViewMode] = useState<'project_chat' | 'global_chat'>(() => {
     const saved = localStorage.getItem(WORKSPACE_STORAGE_KEY);
@@ -51,6 +121,11 @@ const Workspace = () => {
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
+  // Use assigned projects if available, otherwise fall back to static projects
+  const availableProjects = useMemo(() => {
+    return assignedProjects.length > 0 ? assignedProjects : staticProjects;
+  }, [assignedProjects]);
+
   // Initialize state from URL params or localStorage
   const initializeState = (): { project: Project; deliverableId: string; nodeId: string | null } => {
     // Try URL params first
@@ -59,7 +134,10 @@ const Workspace = () => {
     const urlNodeId = searchParams.get('node');
 
     if (projectId) {
-      const project = projects.find(p => p.id === projectId) || projects[0];
+      const project = availableProjects.find(p => p.id === projectId) || availableProjects[0];
+      if (!project) {
+        return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
+      }
       const deliverables = deliverablesMap[project.id] || [];
       const defaultDeliverableId = urlDeliverableId && deliverables.find(d => d.id === urlDeliverableId) 
         ? urlDeliverableId 
@@ -78,7 +156,10 @@ const Workspace = () => {
     if (saved) {
       try {
         const state = JSON.parse(saved);
-        const project = projects.find(p => p.id === state.projectId) || projects[0];
+        const project = availableProjects.find(p => p.id === state.projectId) || availableProjects[0];
+        if (!project) {
+          return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
+        }
         const deliverables = deliverablesMap[project.id] || [];
         const savedDeliverableId = state.deliverableId && deliverables.find(d => d.id === state.deliverableId)
           ? state.deliverableId
@@ -94,7 +175,10 @@ const Workspace = () => {
     }
 
     // Default state
-    const project = projects[0];
+    const project = availableProjects[0];
+    if (!project) {
+      return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
+    }
     const deliverables = deliverablesMap[project.id] || [];
     const defaultDeliverableId = deliverables[0]?.id || '';
     const nodes = deliverableWorkflows[defaultDeliverableId] || [];
@@ -102,7 +186,7 @@ const Workspace = () => {
     return { project, deliverableId: defaultDeliverableId, nodeId: defaultNodeId };
   };
 
-  const initialState = useMemo(() => initializeState(), [searchParams, location.state]);
+  const initialState = useMemo(() => initializeState(), [searchParams, location.state, availableProjects]);
   
   // Core State - initialize from URL/localStorage
   const [activeProject, setActiveProject] = useState<Project>(initialState.project);
@@ -118,7 +202,7 @@ const Workspace = () => {
     
     // Only update if URL params are different from current state
     if (urlProjectId && urlProjectId !== activeProject.id) {
-      const project = projects.find(p => p.id === urlProjectId);
+      const project = availableProjects.find(p => p.id === urlProjectId);
       if (project) {
         setActiveProject(project);
       }
@@ -137,7 +221,20 @@ const Workspace = () => {
         setActiveNodeId(urlNodeId);
       }
     }
-  }, [searchParams, location.state]); // Only depend on URL, not state
+  }, [searchParams, location.state, availableProjects]); // Only depend on URL, not state
+
+  // Update active project when assigned projects load
+  useEffect(() => {
+    if (!isLoadingProjects && availableProjects.length > 0 && !availableProjects.find(p => p.id === activeProject.id)) {
+      const firstProject = availableProjects[0];
+      setActiveProject(firstProject);
+      const deliverables = deliverablesMap[firstProject.id] || [];
+      if (deliverables.length > 0) {
+        setActiveDeliverableId(deliverables[0].id);
+        setActiveNodeId(deliverableWorkflows[deliverables[0].id]?.[0]?.id || null);
+      }
+    }
+  }, [isLoadingProjects, availableProjects]);
 
   // Derived Data
   const currentDeliverables = useMemo(() => deliverablesMap[activeProject.id] || [], [activeProject.id]);
@@ -223,6 +320,9 @@ const Workspace = () => {
         theme={theme}
         onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
         onResizeStart={() => isResizingLeft.current = true}
+        projects={availableProjects}
+        isLoadingProjects={isLoadingProjects}
+        onProjectCreated={handleProjectCreated}
       />
 
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[var(--bg-base)]">
@@ -251,10 +351,12 @@ const Workspace = () => {
         onNodeSelect={setActiveNodeId}
         onResizeStart={() => isResizingRight.current = true}
         // Project Tree Props
-        projects={projects}
+        projects={availableProjects}
         activeProject={activeProject}
         onProjectSelect={handleProjectSelect}
         onDeliverableSelect={handleDeliverableSelect}
+        // New project data for team assignment node visibility
+        newProjectData={newProjectData}
       />
     </div>
   );

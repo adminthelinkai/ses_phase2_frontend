@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../components/Toast';
 
 const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
+  const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -26,6 +28,9 @@ const Login: React.FC = () => {
     
     if (!result.success && result.error) {
       setError(result.error);
+      showToast(result.error, 'error', 5000);
+      // Clear password on error for security
+      setPassword('');
     }
   };
 

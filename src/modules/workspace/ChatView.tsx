@@ -16,11 +16,8 @@ import {
   saveProjectChatMessage,
   saveGlobalChatMessage,
   buildConversationHistory,
-  getParticipantByDepartment,
-  getDefaultBackendProjectId,
   updateProjectChatSessionTitle,
   updateGlobalChatSessionTitle,
-  Participant,
 } from '../../lib/supabase';
 
 // Lazy load the components
@@ -174,22 +171,10 @@ const ChatView: React.FC<ChatViewProps> = ({
   // Ref to track if user intentionally started a new chat
   const isNewChatModeRef = useRef(false);
   
-  // Participant and backend project state
-  const [participant, setParticipant] = useState<Participant | null>(null);
-  const [backendProjectId, setBackendProjectId] = useState<string>('');
-  
-  // Load participant and backend project on mount
-  useEffect(() => {
-    const loadParticipantAndProject = async () => {
-      if (department) {
-        const p = await getParticipantByDepartment(department);
-        setParticipant(p);
-      }
-      const projId = await getDefaultBackendProjectId();
-      setBackendProjectId(projId);
-    };
-    loadParticipantAndProject();
-  }, [department]);
+  // Get participant_id and project_id from current user and active project
+  // Following enterprise standards: no hardcoded values, use authenticated user context
+  const currentParticipantId = useMemo(() => user?.participantId || '', [user?.participantId]);
+  const currentProjectId = useMemo(() => projectId || '', [projectId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -362,20 +347,31 @@ const ChatView: React.FC<ChatViewProps> = ({
       // Build conversation history from all messages including the new one
       const conversationHistory = buildConversationHistory([...currentMessages, savedUserMessage]);
 
-      // Send to API with correct participant_id and backend project_id
-      const apiProjectId = backendProjectId || projectId;
+      // Validate required IDs before API call
+      if (!currentProjectId) {
+        throw new Error('No active project selected. Please select a project.');
+      }
+
+      // Send to API with current user's participant_id and active project_id
+      // Following enterprise standards: using authenticated user context, no hardcoded values
+      console.log('[Chat] Sending to API with:', {
+        participantId: currentParticipantId,
+        projectId: currentProjectId,
+        viewMode
+      });
+
       const response = viewMode === 'project_chat'
         ? await sendProjectChatQuery(
-            participant?.participant_id || '', 
+            currentParticipantId, 
             userMessageContent, 
             conversationHistory, 
-            apiProjectId, 
+            currentProjectId, 
             true
           )
         : await sendGlobalChatQuery(
             userMessageContent, 
             conversationHistory, 
-            apiProjectId
+            currentProjectId
           );
 
       if (response.error) {
@@ -589,7 +585,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  Project Chat
+                  Chat With You
                 </button>
                 <button 
                   onClick={() => onViewModeSelect('global_chat')}

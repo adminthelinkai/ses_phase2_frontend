@@ -1,8 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { projects, Project } from '../../data';
 import { useAuth } from '../../context/AuthContext';
+import { getAssignedProjects, BackendProject } from '../../lib/supabase';
+
+// Type for display projects
+interface DisplayProject {
+  id: string;
+  name: string;
+  status: 'active' | 'on-hold' | 'completed';
+  description?: string;
+  client_name?: string;
+}
 
 const Home = () => {
   const navigate = useNavigate();
@@ -11,6 +20,8 @@ const Home = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [projects, setProjects] = useState<DisplayProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -29,6 +40,43 @@ const Home = () => {
     navigate('/login');
   };
 
+  // Fetch assigned projects
+  useEffect(() => {
+    const fetchProjects = async () => {
+      console.log('User object:', user);
+      console.log('User participantId:', user?.participantId);
+      
+      if (!user?.participantId) {
+        console.warn('No participantId in user session. Please log out and log back in.');
+        setProjects([]);
+        setIsLoadingProjects(false);
+        return;
+      }
+
+      setIsLoadingProjects(true);
+      try {
+        console.log('Fetching projects for participantId:', user.participantId);
+        const assignedProjects = await getAssignedProjects(user.participantId);
+        console.log('Fetched assigned projects:', assignedProjects);
+        const displayProjects: DisplayProject[] = assignedProjects.map((p: BackendProject) => ({
+          id: p.project_id,
+          name: p.name,
+          status: (p.status?.toLowerCase() as 'active' | 'on-hold' | 'completed') || 'active',
+          description: p.description,
+          client_name: p.client_name,
+        }));
+        setProjects(displayProjects);
+      } catch (error) {
+        console.error('Error fetching assigned projects:', error);
+        setProjects([]);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+
+    fetchProjects();
+  }, [user?.participantId]);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('epcm-theme') as 'dark' | 'light';
     if (savedTheme) setTheme(savedTheme);
@@ -39,7 +87,7 @@ const Home = () => {
     localStorage.setItem('epcm-theme', theme);
   }, [theme]);
 
-  const handleLaunch = (project: Project) => {
+  const handleLaunch = (project: DisplayProject) => {
     setSelectedProjectId(project.id);
     setIsTransitioning(true);
     setTimeout(() => {
@@ -172,60 +220,102 @@ const Home = () => {
         <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-400 max-h-[260px]">
           <div className="flex items-center gap-6 px-1">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)] animate-pulse"></div>
-              <span className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-[0.4em]">REGISTRY.Active</span>
+              <div className={`w-2 h-2 rounded-full ${projects.length > 0 ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]'} animate-pulse`}></div>
+              <span className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-[0.4em]">
+                {isLoadingProjects ? 'REGISTRY.Loading' : projects.length > 0 ? 'REGISTRY.Active' : 'REGISTRY.Empty'}
+              </span>
             </div>
             <div className="h-px flex-1 bg-[var(--border-color)]"></div>
-            <span className="text-[9px] font-mono text-[var(--text-muted)] font-bold">TOTAL_ASSETS: 00{projects.length}</span>
+            <span className="text-[9px] font-mono text-[var(--text-muted)] font-bold">
+              TOTAL_ASSETS: {String(projects.length).padStart(3, '0')}
+            </span>
           </div>
 
-          <div className="flex overflow-x-auto scrollbar-hide gap-5 px-1 pb-10 w-full mask-fade-edges">
-            {projects.map((project) => (
-              <div 
-                key={project.id}
-                onClick={() => handleLaunch(project)}
-                className={`flex-shrink-0 group cursor-pointer relative transition-all duration-500 ${selectedProjectId === project.id ? 'scale-[0.96] opacity-30 blur-[2px]' : 'hover:-translate-y-2'}`}
-              >
-                {/* TECHNICAL ASSET MODULE */}
-                <div className="glass-panel w-[260px] h-[150px] p-7 flex flex-col justify-between rounded-lg relative overflow-hidden group">
-                  
-                  {/* CORNER MARKINGS */}
-                  <div className="absolute top-0 right-0 w-6 h-6 opacity-20 border-t-2 border-r-2 border-[var(--text-muted)] group-hover:border-[var(--accent-blue)] group-hover:opacity-100 transition-all duration-500"></div>
-                  <div className="absolute bottom-0 left-0 w-3 h-3 opacity-10 border-b border-l border-[var(--text-muted)]"></div>
-                  <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+          {/* Loading State */}
+          {isLoadingProjects && (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-[0.4em]">
+                  Loading Projects...
+                </span>
+              </div>
+            </div>
+          )}
 
-                  <div className="flex justify-between items-start relative z-10">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-mono text-[var(--accent-blue)] font-bold tracking-widest">{project.id}</span>
-                      <span className="text-[7px] font-black text-[var(--text-muted)] uppercase tracking-widest mt-1 opacity-60">UNIT.ID</span>
-                    </div>
-                    <div className={`text-[8px] font-black px-2 py-0.5 rounded-sm uppercase tracking-widest border ${
-                      project.status === 'active' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 
-                      project.status === 'on-hold' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
-                      'bg-slate-500/10 text-slate-500 border-slate-500/20'
-                    }`}>
-                      {project.status}
-                    </div>
-                  </div>
-                  
-                  <div className="relative z-10">
-                    <h3 className="text-[16px] font-black text-[var(--text-primary)] uppercase tracking-tight leading-none group-hover:text-[var(--accent-blue)] transition-colors duration-300">
-                      {project.name}
-                    </h3>
-                    <div className="text-[7px] font-bold text-[var(--text-muted)] uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                       DISCIPLINE: <span className="text-[var(--text-primary)]">MULTI</span>
-                    </div>
-                  </div>
+          {/* Empty State */}
+          {!isLoadingProjects && projects.length === 0 && (
+            <div className="flex items-center justify-center py-16">
+              <div className="glass-panel p-10 rounded-xl text-center max-w-md">
+                <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-amber-500/10 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                </div>
+                <h3 className="text-[14px] font-black text-[var(--text-primary)] uppercase tracking-[0.2em] mb-3">
+                  No Projects Assigned
+                </h3>
+                <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-relaxed">
+                  You don't have any projects assigned yet. Contact your administrator to get access to projects.
+                </p>
+              </div>
+            </div>
+          )}
 
-                  <div className="mt-auto relative z-10">
-                    <div className="h-[2px] w-full bg-[var(--border-color)] rounded-full overflow-hidden">
-                      <div className={`h-full bg-[var(--accent-blue)] shadow-[0_0_10px_var(--accent-blue)] transition-all duration-700 ${selectedProjectId ? 'w-full' : 'w-1/4'}`}></div>
+          {/* Projects List */}
+          {!isLoadingProjects && projects.length > 0 && (
+            <div className="flex overflow-x-auto scrollbar-hide gap-5 px-1 pb-10 w-full mask-fade-edges">
+              {projects.map((project) => (
+                <div 
+                  key={project.id}
+                  onClick={() => handleLaunch(project)}
+                  className={`flex-shrink-0 group cursor-pointer relative transition-all duration-500 ${selectedProjectId === project.id ? 'scale-[0.96] opacity-30 blur-[2px]' : 'hover:-translate-y-2'}`}
+                >
+                  {/* TECHNICAL ASSET MODULE */}
+                  <div className="glass-panel w-[260px] h-[150px] p-7 flex flex-col justify-between rounded-lg relative overflow-hidden group">
+                    
+                    {/* CORNER MARKINGS */}
+                    <div className="absolute top-0 right-0 w-6 h-6 opacity-20 border-t-2 border-r-2 border-[var(--text-muted)] group-hover:border-[var(--accent-blue)] group-hover:opacity-100 transition-all duration-500"></div>
+                    <div className="absolute bottom-0 left-0 w-3 h-3 opacity-10 border-b border-l border-[var(--text-muted)]"></div>
+                    <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+
+                    <div className="flex justify-between items-start relative z-10">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-mono text-[var(--accent-blue)] font-bold tracking-widest">{project.id.slice(0, 8).toUpperCase()}</span>
+                        <span className="text-[7px] font-black text-[var(--text-muted)] uppercase tracking-widest mt-1 opacity-60">UNIT.ID</span>
+                      </div>
+                      <div className={`text-[8px] font-black px-2 py-0.5 rounded-sm uppercase tracking-widest border ${
+                        project.status === 'active' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 
+                        project.status === 'on-hold' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                        'bg-slate-500/10 text-slate-500 border-slate-500/20'
+                      }`}>
+                        {project.status}
+                      </div>
+                    </div>
+                    
+                    <div className="relative z-10">
+                      <h3 className="text-[16px] font-black text-[var(--text-primary)] uppercase tracking-tight leading-none group-hover:text-[var(--accent-blue)] transition-colors duration-300">
+                        {project.name}
+                      </h3>
+                      <div className="text-[7px] font-bold text-[var(--text-muted)] uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
+                        {project.client_name ? (
+                          <>CLIENT: <span className="text-[var(--text-primary)]">{project.client_name}</span></>
+                        ) : (
+                          <>DISCIPLINE: <span className="text-[var(--text-primary)]">MULTI</span></>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-auto relative z-10">
+                      <div className="h-[2px] w-full bg-[var(--border-color)] rounded-full overflow-hidden">
+                        <div className={`h-full bg-[var(--accent-blue)] shadow-[0_0_10px_var(--accent-blue)] transition-all duration-700 ${selectedProjectId ? 'w-full' : 'w-1/4'}`}></div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 

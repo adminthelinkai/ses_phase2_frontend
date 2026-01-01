@@ -1,8 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ProjectSelector from '../home/ProjectSelector';
-import { Project, DeliverableItem, projects } from '../../data';
+import { Project, DeliverableItem } from '../../data';
 import { useAuth } from '../../context/AuthContext';
+import { Department, Role } from '../../types';
+import type { CreatedProjectData } from '../projects/CreateProjectModal';
+
+// Lazy load modals for code splitting (performance optimization)
+const CreateProjectModal = lazy(() => import('../projects'));
 
 interface SidebarProps {
   width: number;
@@ -18,13 +23,29 @@ interface SidebarProps {
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
   onResizeStart: (e: React.MouseEvent) => void;
+  projects: Project[];
+  isLoadingProjects: boolean;
+  onProjectCreated?: (projectData: CreatedProjectData) => void; // Callback after project creation with project data
 }
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Check if user can create projects (PM department or HOD role)
+  const canCreateProject = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
+
+  // Handle project creation success - close modal and notify parent with project data
+  const handleProjectCreated = useCallback((projectData: CreatedProjectData) => {
+    setShowCreateProjectModal(false);
+    // Pass project data to parent to refresh and navigate to new project
+    if (props.onProjectCreated) {
+      props.onProjectCreated(projectData);
+    }
+  }, [props.onProjectCreated]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -54,7 +75,18 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar py-6">
-        <ProjectSelector activeProject={props.activeProject} projects={projects} onSelect={props.onProjectSelect} />
+        <ProjectSelector 
+          activeProject={props.activeProject} 
+          projects={props.projects} 
+          onSelect={props.onProjectSelect}
+          onCreateProject={
+            // Only show + button for Project Management department or HOD role
+            canCreateProject
+              ? () => setShowCreateProjectModal(true)
+              : undefined
+          }
+          isLoading={props.isLoadingProjects}
+        />
 
         <div className="px-6 mb-8">
           <h3 className="text-[9px] font-black text-[var(--text-muted)] uppercase tracking-[0.2em] mb-4">Deliverables</h3>
@@ -144,6 +176,20 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
       <div onMouseDown={props.onResizeStart} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent-blue)] transition-colors group">
         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-8 bg-[var(--border-color)] group-hover:bg-[var(--accent-blue)] rounded-full"></div>
       </div>
+      )}
+
+      {/* Create Project Modal - Lazy loaded for code splitting */}
+      {showCreateProjectModal && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-8 h-8 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <CreateProjectModal 
+            onClose={() => setShowCreateProjectModal(false)}
+            onSuccess={handleProjectCreated}
+          />
+        </Suspense>
       )}
     </aside>
   );

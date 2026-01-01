@@ -42,6 +42,7 @@ export interface User {
   name: string;
   department: Department;
   role: Role;
+  participantId?: string | null;
 }
 
 export interface AuthState {

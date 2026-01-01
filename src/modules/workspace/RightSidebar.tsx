@@ -1,8 +1,12 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useCallback, lazy, Suspense } from 'react';
 import { NodeItem, DeliverableItem, Project } from '../../data';
+import { useAuth } from '../../context/AuthContext';
+import { Department, Role } from '../../types';
 
-// Lazy load the ProjectTreeView component for code splitting
+// Lazy load components for code splitting
 const ProjectTreeView = lazy(() => import('./ProjectTreeView'));
+const PanZoomCanvas = lazy(() => import('../../components/canvas'));
+const HODAssignmentModal = lazy(() => import('../projects/HODAssignmentModal'));
 
 interface RightSidebarProps {
   width: number;
@@ -18,12 +22,30 @@ interface RightSidebarProps {
   activeProject: Project;
   onProjectSelect: (project: Project) => void;
   onDeliverableSelect: (deliverableId: string) => void;
+  // New project data for 2-min delay on team assignment node
+  newProjectData?: { id: string; createdAt: number } | null;
 }
 
 const RightSidebar: React.FC<RightSidebarProps> = (props) => {
+  const { user } = useAuth();
   const [viewMode, setViewMode] = useState<'project' | 'deliverable'>('deliverable');
+  const [hodModalProject, setHodModalProject] = useState<{ id: string; name: string } | null>(null);
+  
   const completedCount = props.nodes.filter(n => n.status === 'completed').length;
   const progressPercent = props.nodes.length > 0 ? (completedCount / props.nodes.length) * 100 : 0;
+
+  // Only show toggle for Project Management department or HOD role
+  const canToggleViews = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
+
+  // Handle team node click - open HOD assignment modal
+  const handleTeamNodeClick = useCallback((projectId: string, projectName: string) => {
+    setHodModalProject({ id: projectId, name: projectName });
+  }, []);
+
+  // Close HOD modal
+  const handleCloseHodModal = useCallback(() => {
+    setHodModalProject(null);
+  }, []);
 
   const commands = [
     { id: 'add', icon: <path d="M12 4v16m8-8H4" />, color: '#3b82f6', label: 'ADD SUBSTEP' },
@@ -58,29 +80,31 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
               </span>
             </div>
             
-            {/* View Toggle Buttons */}
-            <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)]">
-              <button 
-                onClick={() => setViewMode('project')}
-                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'project' 
-                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                Project
-              </button>
-              <button 
-                onClick={() => setViewMode('deliverable')}
-                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'deliverable' 
-                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                Deliv
-              </button>
-            </div>
+            {/* View Toggle Buttons - Only for PM department or HOD role */}
+            {canToggleViews && (
+              <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)]">
+                <button 
+                  onClick={() => setViewMode('project')}
+                  className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                    viewMode === 'project' 
+                      ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Project
+                </button>
+                <button 
+                  onClick={() => setViewMode('deliverable')}
+                  className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                    viewMode === 'deliverable' 
+                      ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Deliv
+                </button>
+              </div>
+            )}
           </div>
           <h2 className="text-[15px] font-black uppercase tracking-tight text-[var(--text-primary)] leading-tight truncate">
             {viewMode === 'deliverable' 
@@ -97,107 +121,125 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
           </div>
         }>
           {viewMode === 'project' ? (
-            <ProjectTreeView 
-              projects={props.projects}
-              activeProject={props.activeProject}
-              onProjectSelect={props.onProjectSelect}
-              onDeliverableSelect={(id) => {
-                props.onDeliverableSelect(id);
-                setViewMode('deliverable');
-              }}
-            />
+            <Suspense fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }>
+              <PanZoomCanvas className="h-full w-full" minScale={0.5} maxScale={2.0} initialScale={1}>
+                <ProjectTreeView 
+                  projects={props.projects}
+                  activeProject={props.activeProject}
+                  onProjectSelect={props.onProjectSelect}
+                  onDeliverableSelect={(id) => {
+                    props.onDeliverableSelect(id);
+                    setViewMode('deliverable');
+                  }}
+                  onTeamNodeClick={handleTeamNodeClick}
+                  newProjectData={props.newProjectData}
+                />
+              </PanZoomCanvas>
+            </Suspense>
           ) : (
-            <div className="h-full overflow-y-auto px-10 pb-12 pt-8 relative scrollbar-hide">
-              <div className="relative">
-                {/* Technical Vertical Axis */}
-                <div className="absolute left-[7px] top-0 bottom-0 w-px bg-[var(--text-muted)] opacity-40 z-0"></div>
-                
-                <div className="space-y-12">
-                  {props.nodes.map((node, i) => {
-                    const isActive = props.activeNodeId === node.id;
-                    const isCompleted = node.status === 'completed';
+            <Suspense fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }>
+              <PanZoomCanvas className="h-full w-full" minScale={0.5} maxScale={2.0} initialScale={1}>
+                <div className="px-10 pb-12 pt-8 relative">
+                  <div className="relative">
+                    {/* Technical Vertical Axis */}
+                    <div className="absolute left-[7px] top-0 bottom-0 w-px bg-[var(--text-muted)] opacity-40 z-0"></div>
                     
-                    return (
-                      <div key={node.id} className="relative pl-12 group">
-                        {/* Technical Node Marker */}
-                        <div className={`absolute left-[0px] top-[14px] w-[15px] h-[15px] z-20 transition-all duration-500 flex items-center justify-center bg-[var(--bg-sidebar)]`}>
-                          <div className={`w-full h-full border-2 transition-all duration-500 ${
-                            isActive 
-                              ? 'border-[var(--accent-blue)] rotate-45 scale-110 shadow-[0_0_10px_var(--accent-blue)]' 
-                              : isCompleted
-                              ? 'border-[var(--text-muted)] scale-90 opacity-100'
-                              : 'border-[var(--text-muted)] scale-75 opacity-60'
-                          }`}></div>
-                          {isActive && <div className="absolute w-1 h-1 bg-[var(--accent-blue)] animate-pulse"></div>}
-                        </div>
-                
-                        <div className="flex flex-col items-start gap-3">
-                          {/* Redesigned Engineering Node Card */}
-                          <div 
-                            onClick={() => props.onNodeSelect(node.id)} 
-                            className={`w-[220px] h-[64px] transition-all cursor-pointer relative z-30 flex-shrink-0 flex flex-col justify-center px-5 border-l-[3px] backdrop-blur-md shadow-sm ${
-                              isActive 
-                                ? 'bg-[var(--accent-blue)]/5 border-[var(--accent-blue)] shadow-[20px_0_40px_-15px_rgba(31,93,142,0.15)] translate-x-1' 
-                                : isCompleted
-                                ? 'bg-[var(--text-muted)]/10 border-[var(--text-muted)]/30 hover:border-[var(--text-muted)]/50'
-                                : 'bg-white/5 border-[var(--text-muted)]/20 opacity-100 hover:border-[var(--text-muted)]/40'
-                            }`}
-                          >
-                            {/* Technical Corners */}
-                            {isActive && (
-                              <>
-                                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[var(--accent-blue)]/40"></div>
-                                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[var(--accent-blue)]/40"></div>
-                              </>
-                            )}
+                    <div className="space-y-12">
+                      {props.nodes.map((node, i) => {
+                        const isActive = props.activeNodeId === node.id;
+                        const isCompleted = node.status === 'completed';
+                        
+                        return (
+                          <div key={node.id} className="relative pl-12 group">
+                            {/* Technical Node Marker */}
+                            <div className={`absolute left-[0px] top-[14px] w-[15px] h-[15px] z-20 transition-all duration-500 flex items-center justify-center bg-[var(--bg-sidebar)]`}>
+                              <div className={`w-full h-full border-2 transition-all duration-500 ${
+                                isActive 
+                                  ? 'border-[var(--accent-blue)] rotate-45 scale-110 shadow-[0_0_10px_var(--accent-blue)]' 
+                                  : isCompleted
+                                  ? 'border-[var(--text-muted)] scale-90 opacity-100'
+                                  : 'border-[var(--text-muted)] scale-75 opacity-60'
+                              }`}></div>
+                              {isActive && <div className="absolute w-1 h-1 bg-[var(--accent-blue)] animate-pulse"></div>}
+                            </div>
+                    
+                            <div className="flex flex-col items-start gap-3">
+                              {/* Redesigned Engineering Node Card */}
+                              <div 
+                                onClick={() => props.onNodeSelect(node.id)} 
+                                className={`w-[220px] h-[64px] transition-all cursor-pointer relative z-30 flex-shrink-0 flex flex-col justify-center px-5 border-l-[3px] backdrop-blur-md shadow-sm ${
+                                  isActive 
+                                    ? 'bg-[var(--accent-blue)]/5 border-[var(--accent-blue)] shadow-[20px_0_40px_-15px_rgba(31,93,142,0.15)] translate-x-1' 
+                                    : isCompleted
+                                    ? 'bg-[var(--text-muted)]/10 border-[var(--text-muted)]/30 hover:border-[var(--text-muted)]/50'
+                                    : 'bg-white/5 border-[var(--text-muted)]/20 opacity-100 hover:border-[var(--text-muted)]/40'
+                                }`}
+                              >
+                                {/* Technical Corners */}
+                                {isActive && (
+                                  <>
+                                    <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[var(--accent-blue)]/40"></div>
+                                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[var(--accent-blue)]/40"></div>
+                                  </>
+                                )}
 
-                            <div className="flex items-center justify-between mb-1">
-                              <span className={`text-[7px] font-mono font-bold tracking-[0.3em] uppercase ${
-                                isActive ? 'text-[var(--accent-blue)]' : 'text-[var(--text-primary)] opacity-60'
-                              }`}>
-                                S-{i+1 < 10 ? `0${i+1}` : i+1}
-                              </span>
-                              {isCompleted && (
-                                <div className="text-[6px] font-mono text-[var(--accent-blue)]/60 tracking-widest uppercase italic font-black">Verified</div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`text-[7px] font-mono font-bold tracking-[0.3em] uppercase ${
+                                    isActive ? 'text-[var(--accent-blue)]' : 'text-[var(--text-primary)] opacity-60'
+                                  }`}>
+                                    S-{i+1 < 10 ? `0${i+1}` : i+1}
+                                  </span>
+                                  {isCompleted && (
+                                    <div className="text-[6px] font-mono text-[var(--accent-blue)]/60 tracking-widest uppercase italic font-black">Verified</div>
+                                  )}
+                                </div>
+                          
+                                <h3 className={`text-[10px] font-black uppercase tracking-widest transition-all ${
+                                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
+                                }`}>
+                                  {node.name}
+                                </h3>
+                                
+                                {/* Subtle status line for inactive nodes */}
+                                {!isActive && (
+                                  <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-[var(--text-muted)]/20 via-transparent to-transparent"></div>
+                                )}
+                              </div>
+                            
+                              {/* Compact Command Actions - Positioned BELOW */}
+                              {isActive && (
+                                <div className="flex gap-2 pl-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                                  {commands.map(cmd => (
+                                    <button 
+                                      key={cmd.id}
+                                      className="w-8 h-8 rounded-none border border-[var(--text-muted)]/30 flex items-center justify-center transition-all hover:bg-[var(--accent-blue)] hover:border-[var(--accent-blue)] hover:text-white text-[var(--text-secondary)] group/btn relative"
+                                      title={cmd.label}
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{cmd.icon}</svg>
+                                      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-[6px] font-black uppercase tracking-widest opacity-0 group-hover/btn:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
+                                        {cmd.label}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
                               )}
                             </div>
-                      
-                            <h3 className={`text-[10px] font-black uppercase tracking-widest transition-all ${
-                              isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
-                            }`}>
-                              {node.name}
-                            </h3>
-                            
-                            {/* Subtle status line for inactive nodes */}
-                            {!isActive && (
-                              <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-[var(--text-muted)]/20 via-transparent to-transparent"></div>
-                            )}
                           </div>
-                        
-                          {/* Compact Command Actions - Positioned BELOW */}
-                          {isActive && (
-                            <div className="flex gap-2 pl-1 animate-in fade-in slide-in-from-top-2 duration-300">
-                              {commands.map(cmd => (
-                                <button 
-                                  key={cmd.id}
-                                  className="w-8 h-8 rounded-none border border-[var(--text-muted)]/30 flex items-center justify-center transition-all hover:bg-[var(--accent-blue)] hover:border-[var(--accent-blue)] hover:text-white text-[var(--text-secondary)] group/btn relative"
-                                  title={cmd.label}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{cmd.icon}</svg>
-                                  <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-[6px] font-black uppercase tracking-widest opacity-0 group-hover/btn:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
-                                    {cmd.label}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </PanZoomCanvas>
+            </Suspense>
           )}
         </Suspense>
       </div>
@@ -243,6 +285,21 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
+
+      {/* HOD Assignment Modal - Lazy loaded for code splitting */}
+      {hodModalProject && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <HODAssignmentModal 
+            projectId={hodModalProject.id}
+            projectName={hodModalProject.name}
+            onClose={handleCloseHodModal}
+          />
+        </Suspense>
+      )}
     </aside>
   );
 };

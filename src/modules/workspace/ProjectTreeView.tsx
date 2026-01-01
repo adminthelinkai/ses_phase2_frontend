@@ -1,17 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Project, deliverablesMap } from '../../data';
+import { useAuth } from '../../context/AuthContext';
+import { Department, Role } from '../../types';
 
 interface ProjectTreeViewProps {
   projects: Project[];
   activeProject: Project;
   onProjectSelect: (project: Project) => void;
   onDeliverableSelect: (deliverableId: string) => void;
+  onTeamNodeClick?: (projectId: string, projectName: string) => void;
+  newProjectData?: { id: string; createdAt: number } | null;
 }
 
-const ProjectTreeView: React.FC<ProjectTreeViewProps> = ({ 
+// 2 minutes in milliseconds
+const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({ 
   activeProject, 
-  onDeliverableSelect 
+  onDeliverableSelect,
+  onTeamNodeClick,
+  newProjectData,
 }) => {
+  const { user } = useAuth();
+  const [showTeamNode, setShowTeamNode] = useState(false);
+  
+  // Check if user can manage team (PM department or HOD role)
+  const canManageTeam = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
+  
+  // Handle 2-minute delay for newly created projects
+  useEffect(() => {
+    // For existing projects (not newly created), always show the team node
+    if (!newProjectData || newProjectData.id !== activeProject.id) {
+      setShowTeamNode(true);
+      return;
+    }
+    
+    // For newly created project, check if 2 minutes have passed
+    const elapsed = Date.now() - newProjectData.createdAt;
+    
+    if (elapsed >= TWO_MINUTES_MS) {
+      setShowTeamNode(true);
+      return;
+    }
+    
+    // Set timeout for remaining time
+    const remaining = TWO_MINUTES_MS - elapsed;
+    const timer = setTimeout(() => {
+      setShowTeamNode(true);
+    }, remaining);
+    
+    return () => clearTimeout(timer);
+  }, [newProjectData, activeProject.id]);
+  
   // Only show the active project's structure
   const deliverables = deliverablesMap[activeProject.id] || [];
   
@@ -24,22 +64,71 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = ({
   });
   
   const departments = Object.keys(deptMap);
+  
+  // Handle team node click
+  const handleTeamNodeClick = () => {
+    if (onTeamNodeClick) {
+      onTeamNodeClick(activeProject.id, activeProject.name);
+    }
+  };
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar px-6 py-10 relative">
+    <div className="px-6 py-10 relative min-h-full">
       <div className="flex flex-col items-center w-full max-w-sm mx-auto relative">
         
         {/* VERTICAL SPINE - Connecting all nodes */}
         <div className="absolute top-10 bottom-10 left-1/2 -translate-x-1/2 w-[2px] bg-gradient-to-b from-[var(--accent-blue)] via-[var(--accent-blue)]/30 to-transparent z-0"></div>
 
         {/* PROJECT ROOT - Level 0 */}
-        <div className="relative z-10 mb-16 group">
-          <div className="w-56 h-24 bg-[var(--accent-blue)] border-2 border-[var(--accent-blue)] rounded-3xl shadow-[0_0_30px_rgba(31,93,142,0.3)] flex flex-col items-center justify-center transition-all duration-300 group-hover:shadow-[0_0_40px_rgba(31,93,142,0.5)] group-hover:-translate-y-1">
-            <span className="text-[9px] font-black tracking-[0.4em] text-blue-100/60 mb-1 uppercase">Project_Root</span>
-            <span className="text-[15px] font-black text-white uppercase tracking-tight">{activeProject.id}</span>
-            <div className="text-[10px] text-blue-100/40 font-bold uppercase tracking-widest mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Active Context</div>
+        <div className="relative z-10 mb-16 group w-full max-w-[280px]">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] px-5 py-4 flex flex-col transition-all duration-300 hover:border-[var(--accent-blue)] hover:shadow-lg hover:-translate-y-0.5 relative border-l-[3px] border-l-[var(--accent-blue)]">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[8px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-[0.2em]">
+                Project_Root
+              </span>
+              <span className="text-[7px] font-mono font-bold text-[var(--accent-blue)] uppercase tracking-widest">
+                Active
+              </span>
+            </div>
+            {/* Project Name */}
+            <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-widest group-hover:text-[var(--accent-blue)] transition-colors">
+              {activeProject.name}
+            </h3>
           </div>
         </div>
+
+        {/* TEAM ASSIGNMENT NODE - Below PROJECT_ROOT, visible to PM/HOD only */}
+        {canManageTeam && showTeamNode && (
+          <div 
+            className="relative z-10 mb-16 group w-full max-w-[280px] cursor-pointer"
+            onClick={handleTeamNodeClick}
+          >
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] px-5 py-4 flex flex-col transition-all duration-300 hover:border-amber-500 hover:shadow-lg hover:-translate-y-0.5 relative border-l-[3px] border-l-amber-500/50 hover:border-l-amber-500">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[8px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-[0.2em]">
+                  Team_Assignment
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-3 h-3 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                  <span className="text-[7px] font-mono font-bold text-amber-500 uppercase tracking-widest">
+                    Manage
+                  </span>
+                </div>
+              </div>
+              {/* Description */}
+              <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-widest group-hover:text-amber-500 transition-colors">
+                Assigned HODs
+              </h3>
+              <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1">
+                Click to view/edit team
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* FLOW BODY */}
         <div className="w-full flex flex-col items-center gap-12 relative z-10">
@@ -47,37 +136,45 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = ({
             <React.Fragment key={dept}>
               {/* DEPARTMENT NODE - Level 1 */}
               <div className="flex flex-col items-center w-full group">
-                <div className="w-40 h-12 bg-[var(--bg-panel)] border-2 border-[var(--accent-blue)]/50 rounded-2xl shadow-xl flex items-center justify-center relative z-20 transition-all duration-300 group-hover:border-[var(--accent-blue)] group-hover:shadow-blue-900/20 group-hover:-translate-y-0.5">
-                  <span className="text-[11px] font-black text-[var(--text-primary)] tracking-[0.3em] uppercase">{dept}</span>
+                <div className="w-full max-w-[280px] bg-[var(--bg-panel)] border border-[var(--border-color)] px-5 py-3 flex flex-col transition-all duration-300 hover:border-[var(--accent-blue)] hover:shadow-lg relative border-l-[3px] border-l-[var(--accent-blue)]/50 hover:border-l-[var(--accent-blue)]">
+                  <span className="text-[8px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] mb-1">Department</span>
+                  <span className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-widest">{dept}</span>
                 </div>
 
                 {/* DELIVERABLES - Level 2 */}
                 <div className="flex flex-col gap-4 mt-8 w-full items-center">
-                  {deptMap[dept].map((deliv) => (
+                  {deptMap[dept].map((deliv, idx) => (
                     <div 
                       key={deliv.id}
                       onClick={() => onDeliverableSelect(deliv.id)}
                       className="w-full max-w-[280px] group/deliv cursor-pointer"
                     >
-                      <div className="bg-[var(--bg-panel)]/80 backdrop-blur-md border border-[var(--border-color)] rounded-2xl p-4 flex flex-col transition-all duration-300 hover:border-[var(--accent-blue)] hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden">
-                        {/* Status Indicator Bar */}
-                        <div className={`absolute top-0 left-0 bottom-0 w-1 transition-all ${
-                          deliv.status === 'completed' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 
-                          deliv.status === 'active' ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse' : 'bg-slate-500'
-                        }`}></div>
-
-                        <div className="flex items-center justify-between mb-2 pl-2">
-                          <span className="text-[8px] font-mono font-black text-[var(--accent-blue)] uppercase tracking-widest">{deliv.code}</span>
-                          <div className={`text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
-                            deliv.status === 'completed' ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/5' :
-                            deliv.status === 'active' ? 'text-blue-500 border-blue-500/30 bg-blue-500/5' : 'text-slate-500 border-slate-500/30'
-                          }`}>
-                            {deliv.status}
-                          </div>
+                      <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] px-5 py-4 flex flex-col transition-all duration-300 hover:border-[var(--accent-blue)] hover:shadow-lg hover:-translate-y-0.5 relative border-l-[3px] border-l-[var(--accent-blue)]/30 hover:border-l-[var(--accent-blue)]">
+                        {/* Header with code and status */}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[8px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-[0.2em]">
+                            S-{(idx + 1).toString().padStart(2, '0')}
+                          </span>
+                          {deliv.status === 'completed' && (
+                            <span className="text-[7px] font-mono font-bold text-[var(--text-muted)] uppercase tracking-widest">
+                              Verified
+                            </span>
+                          )}
+                          {deliv.status === 'active' && (
+                            <span className="text-[7px] font-mono font-bold text-[var(--accent-blue)] uppercase tracking-widest">
+                              Active
+                            </span>
+                          )}
+                          {deliv.status === 'pending' && (
+                            <span className="text-[7px] font-mono font-bold text-[var(--text-muted)]/50 uppercase tracking-widest">
+                              Pending
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] font-black text-[var(--text-primary)] uppercase leading-tight pl-2 group-hover/deliv:text-[var(--accent-blue)] transition-colors">
+                        {/* Deliverable Name */}
+                        <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-widest group-hover/deliv:text-[var(--accent-blue)] transition-colors">
                           {deliv.name}
-                        </div>
+                        </h3>
                       </div>
                     </div>
                   ))}
@@ -94,6 +191,8 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ProjectTreeView.displayName = 'ProjectTreeView';
 
 export default ProjectTreeView;

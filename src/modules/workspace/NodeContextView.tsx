@@ -131,7 +131,7 @@ const NodeContextView: React.FC<NodeContextViewProps> = ({
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              Project Chat
+              Chat With You
             </button>
             <button 
               onClick={() => onViewModeSelect('global_chat')}
