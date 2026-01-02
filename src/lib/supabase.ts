@@ -386,8 +386,29 @@ export interface ProjectAssignment {
 }
 
 /**
+ * Get ALL projects (for ADMIN and HEAD_SES users with full access)
+ */
+export async function getAllProjects(): Promise<BackendProject[]> {
+  console.log('[Supabase] getAllProjects called - fetching all projects');
+  
+  const { data, error } = await supabase
+    .from('projects')
+    .select('project_id, name, description, client_name, status')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[Supabase] Error fetching all projects:', error);
+    return [];
+  }
+
+  console.log('[Supabase] All projects fetched:', data?.length || 0);
+  return (data || []) as BackendProject[];
+}
+
+/**
  * Get projects assigned to a participant
  * Uses direct JOIN query on participant_project_assignments and projects tables
+ * For ADMIN/HEAD_SES users, use getAllProjects() instead
  */
 export async function getAssignedProjects(participantId: string): Promise<BackendProject[]> {
   console.log('[Supabase] getAssignedProjects called with:', participantId);
@@ -541,6 +562,128 @@ export function groupParticipantsByDiscipline(
   }
   
   return grouped;
+}
+
+// ============== PROJECT TEAM BY DEPARTMENT ==============
+
+export interface TeamMember {
+  participant_id: string;
+  name: string;
+  designation: string;
+  designation_code?: string;
+  is_hod: boolean;
+  discipline: string;
+}
+
+export interface DepartmentTeam {
+  discipline: string;
+  displayName: string;
+  hod: TeamMember | null;
+  members: TeamMember[];
+}
+
+/**
+ * Get project team grouped by department
+ * Returns only departments that have assigned members
+ */
+export async function getProjectTeamByDepartment(projectId: string): Promise<DepartmentTeam[]> {
+  if (!projectId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('participant_project_assignments')
+    .select(`
+      participant_id,
+      participants!inner (
+        participant_id,
+        name,
+        discipline,
+        designation,
+        is_hod,
+        designations!left(code)
+      )
+    `)
+    .eq('project_id', projectId)
+    .eq('is_active', true);
+
+  if (error) {
+    console.error('[Supabase] Error fetching project team:', error);
+    return [];
+  }
+
+  // Transform and group by discipline
+  interface ParticipantWithDesignation {
+    participant_id: string;
+    name: string;
+    discipline: string;
+    designation: string;
+    is_hod: boolean;
+    designations: { code: string } | { code: string }[] | null;
+  }
+
+  interface AssignmentData {
+    participant_id: string;
+    participants: ParticipantWithDesignation | ParticipantWithDesignation[];
+  }
+
+  const groupedByDiscipline: Record<string, { hod: TeamMember | null; members: TeamMember[] }> = {};
+
+  (data || []).forEach((item: AssignmentData) => {
+    const participant = Array.isArray(item.participants) 
+      ? item.participants[0] 
+      : item.participants;
+    
+    if (!participant) return;
+
+    const designationData = Array.isArray(participant.designations) 
+      ? participant.designations[0] 
+      : participant.designations;
+
+    const teamMember: TeamMember = {
+      participant_id: participant.participant_id,
+      name: participant.name,
+      designation: participant.designation,
+      designation_code: designationData?.code || undefined,
+      is_hod: participant.is_hod,
+      discipline: participant.discipline,
+    };
+
+    const discipline = participant.discipline || 'OTHER';
+    if (!groupedByDiscipline[discipline]) {
+      groupedByDiscipline[discipline] = { hod: null, members: [] };
+    }
+
+    if (participant.is_hod) {
+      groupedByDiscipline[discipline].hod = teamMember;
+    } else {
+      groupedByDiscipline[discipline].members.push(teamMember);
+    }
+  });
+
+  // Convert to array and sort by DISCIPLINE_ORDER
+  const result: DepartmentTeam[] = DISCIPLINE_ORDER
+    .filter(discipline => groupedByDiscipline[discipline])
+    .map(discipline => ({
+      discipline,
+      displayName: DISCIPLINE_DISPLAY_NAMES[discipline] || discipline,
+      hod: groupedByDiscipline[discipline].hod,
+      members: groupedByDiscipline[discipline].members.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+
+  // Add any disciplines not in DISCIPLINE_ORDER
+  Object.keys(groupedByDiscipline)
+    .filter(d => !DISCIPLINE_ORDER.includes(d))
+    .forEach(discipline => {
+      result.push({
+        discipline,
+        displayName: DISCIPLINE_DISPLAY_NAMES[discipline] || discipline,
+        hod: groupedByDiscipline[discipline].hod,
+        members: groupedByDiscipline[discipline].members.sort((a, b) => a.name.localeCompare(b.name)),
+      });
+    });
+
+  return result;
 }
 
 // ============== PARTICIPANT PROJECT ASSIGNMENT ==============

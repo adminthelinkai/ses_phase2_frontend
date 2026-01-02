@@ -15,6 +15,7 @@ export enum Department {
 
 export enum Role {
   ADMIN = 'ADMIN',
+  HEAD_SES = 'HEAD_SES',
   MANAGEMENT = 'MANAGEMENT',
   HOD = 'HOD',
   ENGINEER = 'ENGINEER',

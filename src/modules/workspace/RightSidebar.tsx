@@ -34,11 +34,16 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   const completedCount = props.nodes.filter(n => n.status === 'completed').length;
   const progressPercent = props.nodes.length > 0 ? (completedCount / props.nodes.length) * 100 : 0;
 
-  // Only show toggle for Project Management department or HOD role
-  const canToggleViews = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
+  // Only show toggle for Project Management department, HOD role, ADMIN, or HEAD_SES
+  const canToggleViews = user?.department === Department.PROJECT_MANAGEMENT || 
+    user?.role === Role.HOD || 
+    user?.role === Role.ADMIN || 
+    user?.role === Role.HEAD_SES;
 
-  // Only PM (Project Management department) can edit HOD assignments
-  const canEditHODs = user?.department === Department.PROJECT_MANAGEMENT;
+  // PM (Project Management department), ADMIN, or HEAD_SES can edit HOD assignments
+  const canEditHODs = user?.department === Department.PROJECT_MANAGEMENT || 
+    user?.role === Role.ADMIN || 
+    user?.role === Role.HEAD_SES;
 
   // Handle team node click - open HOD assignment modal
   const handleTeamNodeClick = useCallback((projectId: string, projectName: string) => {

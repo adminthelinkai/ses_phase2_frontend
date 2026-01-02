@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getAssignedProjects, BackendProject } from '../../lib/supabase';
+import { Role } from '../../types';
+import { getAssignedProjects, getAllProjects, BackendProject } from '../../lib/supabase';
 
 // Type for display projects
 interface DisplayProject {
@@ -40,11 +41,15 @@ const Home = () => {
     navigate('/login');
   };
 
+  // Check if user has full access (ADMIN or HEAD_SES)
+  const hasFullAccess = user?.role === Role.ADMIN || user?.role === Role.HEAD_SES;
+
   // Fetch assigned projects
   useEffect(() => {
     const fetchProjects = async () => {
       console.log('User object:', user);
       console.log('User participantId:', user?.participantId);
+      console.log('User role:', user?.role, 'hasFullAccess:', hasFullAccess);
       
       if (!user?.participantId) {
         console.warn('No participantId in user session. Please log out and log back in.');
@@ -56,9 +61,12 @@ const Home = () => {
       setIsLoadingProjects(true);
       try {
         console.log('Fetching projects for participantId:', user.participantId);
-        const assignedProjects = await getAssignedProjects(user.participantId);
-        console.log('Fetched assigned projects:', assignedProjects);
-        const displayProjects: DisplayProject[] = assignedProjects.map((p: BackendProject) => ({
+        // ADMIN and HEAD_SES get all projects, others get only assigned projects
+        const backendProjects = hasFullAccess 
+          ? await getAllProjects()
+          : await getAssignedProjects(user.participantId);
+        console.log('Fetched projects:', backendProjects);
+        const displayProjects: DisplayProject[] = backendProjects.map((p: BackendProject) => ({
           id: p.project_id,
           name: p.name,
           status: (p.status?.toLowerCase() as 'active' | 'on-hold' | 'completed') || 'active',
@@ -75,7 +83,7 @@ const Home = () => {
     };
 
     fetchProjects();
-  }, [user?.participantId]);
+  }, [user?.participantId, user?.role, hasFullAccess]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('epcm-theme') as 'dark' | 'light';

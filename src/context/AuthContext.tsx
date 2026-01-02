@@ -28,6 +28,7 @@ const mapDepartment = (deptCode: string | null): Department => {
     // Legacy mappings
     'ADMIN': Department.ADMIN,
     'MANAGEMENT': Department.MANAGEMENT,
+    'MGMT': Department.MANAGEMENT, // Management department code
     'CSA': Department.CSA,
     'INSTRUMENT': Department.INSTRUMENT,
     'PROJECT_MANAGEMENT': Department.PROJECT_MANAGEMENT,
@@ -43,6 +44,9 @@ const mapRole = (designationTitle: string | null): Role => {
   // Map designation titles to roles
   const roleMap: Record<string, Role> = {
     'ADMIN': Role.ADMIN,
+    'SYSTEM ADMINISTRATOR': Role.ADMIN,
+    'HEAD OF SITE ENGINEERING SERVICES': Role.HEAD_SES, // Head of SES - Full Access
+    'HEAD_SES': Role.HEAD_SES,
     'MANAGEMENT': Role.MANAGEMENT,
     'MANAGNMENT': Role.MANAGEMENT, // Handle typo in DB
     'HOD': Role.HOD,
@@ -58,7 +62,10 @@ const mapRole = (designationTitle: string | null): Role => {
     return roleMap[titleUpper];
   }
   
-  // Check if title contains key words
+  // Check if title contains key words - but not HEAD OF SES (already handled above)
+  if (titleUpper.includes('HEAD OF SITE')) {
+    return Role.HEAD_SES;
+  }
   if (titleUpper.includes('MANAGER') || titleUpper.includes('HEAD')) {
     return Role.HOD;
   }

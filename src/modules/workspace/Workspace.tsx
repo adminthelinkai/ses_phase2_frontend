@@ -5,7 +5,8 @@ import RightSidebar from './RightSidebar';
 import WorkspaceHeader from './WorkspaceHeader';
 import { projects as staticProjects, deliverablesMap, deliverableWorkflows, Project } from '../../data';
 import { useAuth } from '../../context/AuthContext';
-import { getAssignedProjects, BackendProject } from '../../lib/supabase';
+import { Role } from '../../types';
+import { getAssignedProjects, getAllProjects, BackendProject } from '../../lib/supabase';
 import type { CreatedProjectData } from '../projects/CreateProjectModal';
 
 const ChatView = lazy(() => import('./ChatView'));
@@ -35,6 +36,9 @@ const Workspace = () => {
   // State for newly created project (for 2-min delay on team assignment node)
   const [newProjectData, setNewProjectData] = useState<{ id: string; createdAt: number } | null>(null);
   
+  // Check if user has full access (ADMIN or HEAD_SES)
+  const hasFullAccess = user?.role === Role.ADMIN || user?.role === Role.HEAD_SES;
+
   // Fetch assigned projects - extracted as callback for reuse after project creation
   const fetchProjects = useCallback(async () => {
     if (!user?.participantId) {
@@ -45,7 +49,10 @@ const Workspace = () => {
 
     setIsLoadingProjects(true);
     try {
-      const backendProjects = await getAssignedProjects(user.participantId);
+      // ADMIN and HEAD_SES get all projects, others get only assigned projects
+      const backendProjects = hasFullAccess 
+        ? await getAllProjects()
+        : await getAssignedProjects(user.participantId);
       const projects: Project[] = backendProjects.map((p: BackendProject) => ({
         id: p.project_id,
         name: p.name,
@@ -58,7 +65,7 @@ const Workspace = () => {
     } finally {
       setIsLoadingProjects(false);
     }
-  }, [user?.participantId]);
+  }, [user?.participantId, hasFullAccess]);
 
   // Initial fetch on mount
   useEffect(() => {
