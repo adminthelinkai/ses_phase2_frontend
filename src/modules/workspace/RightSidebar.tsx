@@ -37,6 +37,9 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   // Only show toggle for Project Management department or HOD role
   const canToggleViews = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
 
+  // Only PM (Project Management department) can edit HOD assignments
+  const canEditHODs = user?.department === Department.PROJECT_MANAGEMENT;
+
   // Handle team node click - open HOD assignment modal
   const handleTeamNodeClick = useCallback((projectId: string, projectName: string) => {
     setHodModalProject({ id: projectId, name: projectName });
@@ -296,6 +299,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
           <HODAssignmentModal 
             projectId={hodModalProject.id}
             projectName={hodModalProject.name}
+            isReadOnly={!canEditHODs}
             onClose={handleCloseHodModal}
           />
         </Suspense>

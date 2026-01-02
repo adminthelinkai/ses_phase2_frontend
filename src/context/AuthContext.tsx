@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, TeamMember } from '../lib/supabase';
+import { supabase, ParticipantAuth } from '../lib/supabase';
 import { AuthState, User, Department, Role } from '../types';
 
 interface AuthContextType extends AuthState {
@@ -12,35 +12,64 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'epcm-auth-state';
-const SESSION_VERSION = 2; // Increment this when user schema changes to force refresh
+const SESSION_VERSION = 3; // Increment this when user schema changes to force refresh
 
-// Map database department string to Department enum
-const mapDepartment = (dept: string | null): Department => {
-  if (!dept) return Department.CSA;
+// Map database department code (from departments.code) to Department enum
+const mapDepartment = (deptCode: string | null): Department => {
+  if (!deptCode) return Department.CSA;
   const deptMap: Record<string, Department> = {
+    'PROJECT': Department.PROJECT_MANAGEMENT,
+    'PROCESS': Department.PROCESS,
+    'MECHANICAL': Department.MECHANICAL,
+    'CIVIL': Department.CSA,
+    'ELECTRICAL': Department.ELECTRICAL,
+    'I&C': Department.INSTRUMENT,
+    'HSE': Department.CSA,
+    // Legacy mappings
     'ADMIN': Department.ADMIN,
     'MANAGEMENT': Department.MANAGEMENT,
     'CSA': Department.CSA,
-    'ELECTRICAL': Department.ELECTRICAL,
     'INSTRUMENT': Department.INSTRUMENT,
     'PROJECT_MANAGEMENT': Department.PROJECT_MANAGEMENT,
-    'PROCESS': Department.PROCESS,
-    'MECHANICAL': Department.MECHANICAL,
   };
-  return deptMap[dept.toUpperCase()] || Department.CSA;
+  return deptMap[deptCode.toUpperCase()] || Department.CSA;
 };
 
-// Map database role string to Role enum
-const mapRole = (role: string | null): Role => {
-  if (!role) return Role.ENGINEER;
+// Map database designation title (from designations.title) to Role enum
+const mapRole = (designationTitle: string | null): Role => {
+  if (!designationTitle) return Role.ENGINEER;
+  const titleUpper = designationTitle.toUpperCase();
+  
+  // Map designation titles to roles
   const roleMap: Record<string, Role> = {
     'ADMIN': Role.ADMIN,
     'MANAGEMENT': Role.MANAGEMENT,
+    'MANAGNMENT': Role.MANAGEMENT, // Handle typo in DB
     'HOD': Role.HOD,
+    'HEAD OF DEPARTRMENT': Role.HOD,
     'ENGINEER': Role.ENGINEER,
     'DESIGNER': Role.DESIGNER,
+    'PROJECT MANAGER': Role.HOD,
+    'SENIOR ENGINEER': Role.ENGINEER,
   };
-  return roleMap[role.toUpperCase()] || Role.ENGINEER;
+  
+  // Check exact match first
+  if (roleMap[titleUpper]) {
+    return roleMap[titleUpper];
+  }
+  
+  // Check if title contains key words
+  if (titleUpper.includes('MANAGER') || titleUpper.includes('HEAD')) {
+    return Role.HOD;
+  }
+  if (titleUpper.includes('SENIOR')) {
+    return Role.ENGINEER;
+  }
+  if (titleUpper.includes('DESIGNER') || titleUpper.includes('COORDINATOR')) {
+    return Role.DESIGNER;
+  }
+  
+  return Role.ENGINEER;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,12 +78,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasInitialized = useRef(false);
 
   // Helper to fetch fresh user data from database
-  const fetchUserData = useCallback(async (userId: string): Promise<User | null> => {
+  const fetchUserData = useCallback(async (participantId: string): Promise<User | null> => {
     try {
       const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('id', userId)
+        .from('participants')
+        .select(`
+          *,
+          designations:designation_id (title),
+          departments:department_id (code)
+        `)
+        .eq('participant_id', participantId)
         .single();
 
       if (error || !data) {
@@ -62,13 +95,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
-      const teamMember = data as TeamMember;
+      const participant = data as ParticipantAuth & {
+        designations: { title: string } | null;
+        departments: { code: string } | null;
+      };
+      
       return {
-        id: teamMember.id,
-        name: teamMember.email.split('@')[0],
-        department: mapDepartment(teamMember.department),
-        role: mapRole(teamMember.role),
-        participantId: teamMember.participant_id,
+        id: participant.participant_id,
+        name: participant.name,
+        department: mapDepartment(participant.departments?.code || null),
+        role: mapRole(participant.designations?.title || null),
+        participantId: participant.participant_id,
       };
     } catch (err) {
       console.error('Error fetching user data:', err);
@@ -173,10 +210,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
-      // Query team_members table to validate credentials
+      // Query participants table with joins to get designation title and department code
       const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
+        .from('participants')
+        .select(`
+          *,
+          designations:designation_id (title),
+          departments:department_id (code)
+        `)
         .eq('email', email.toLowerCase().trim())
         .single();
 
@@ -188,35 +229,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Invalid email address' };
       }
 
-      const teamMember = data as TeamMember;
-      console.log('[Auth] Team member found:', {
-        id: teamMember.id,
-        email: teamMember.email,
-        department: teamMember.department,
-        role: teamMember.role,
-        participant_id: teamMember.participant_id
+      const participant = data as ParticipantAuth & {
+        designations: { title: string } | null;
+        departments: { code: string } | null;
+      };
+      
+      console.log('[Auth] Participant found:', {
+        participant_id: participant.participant_id,
+        name: participant.name,
+        email: participant.email,
+        designation_title: participant.designations?.title,
+        department_code: participant.departments?.code
       });
 
       // Check password (Note: In production, passwords should be hashed)
       const trimmedPassword = password.trim();
-      if (teamMember.password !== trimmedPassword) {
-        console.log('[Auth] Login failed: password mismatch', {
-          expected: teamMember.password,
-          received: trimmedPassword,
-          expectedLength: teamMember.password?.length,
-          receivedLength: trimmedPassword.length
-        });
+      if (participant.password !== trimmedPassword) {
+        console.log('[Auth] Login failed: password mismatch');
         setIsLoading(false);
         return { success: false, error: 'Invalid password' };
       }
 
-      // Create user object from team member data
+      // Create user object from participant data
       const user: User = {
-        id: teamMember.id,
-        name: teamMember.email.split('@')[0], // Use email prefix as name
-        department: mapDepartment(teamMember.department),
-        role: mapRole(teamMember.role),
-        participantId: teamMember.participant_id,
+        id: participant.participant_id,
+        name: participant.name,
+        department: mapDepartment(participant.departments?.code || null),
+        role: mapRole(participant.designations?.title || null),
+        participantId: participant.participant_id,
       };
 
       console.log('[Auth] Login successful, user:', user);

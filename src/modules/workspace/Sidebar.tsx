@@ -35,8 +35,8 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Check if user can create projects (PM department or HOD role)
-  const canCreateProject = user?.department === Department.PROJECT_MANAGEMENT || user?.role === Role.HOD;
+  // Check if user can create projects (only Project Management department)
+  const canCreateProject = user?.department === Department.PROJECT_MANAGEMENT;
 
   // Handle project creation success - close modal and notify parent with project data
   const handleProjectCreated = useCallback((projectData: CreatedProjectData) => {

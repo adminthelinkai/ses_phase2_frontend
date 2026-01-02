@@ -225,10 +225,12 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
 
       try {
+        console.log('[ChatView] Loading messages for session:', activeSessionId);
         const loadedMessages = viewMode === 'project_chat'
           ? await getProjectChatMessages(activeSessionId)
           : await getGlobalChatMessages(activeSessionId);
         
+        console.log('[ChatView] Loaded messages:', loadedMessages);
         setMessages(loadedMessages);
       } catch (err) {
         console.error('Failed to load messages:', err);
@@ -245,6 +247,15 @@ const ChatView: React.FC<ChatViewProps> = ({
     setActiveSessionId(null);
     setMessages([]);
   }, [viewMode]);
+
+  // Reset active session when project changes
+  useEffect(() => {
+    console.log('[ChatView] Project changed to:', projectId);
+    isNewChatModeRef.current = false;
+    setActiveSessionId(null);
+    setMessages([]);
+    setSessions([]);
+  }, [projectId]);
 
   const handleNewChat = () => {
     isNewChatModeRef.current = true; // Prevent auto-selecting existing session
@@ -297,7 +308,13 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || isLoading) return;
+    console.log('[ChatView] handleSubmit called with query:', query, 'isLoading:', isLoading);
+    console.log('[ChatView] userId:', userId, 'projectId:', projectId, 'currentParticipantId:', currentParticipantId);
+    
+    if (!query.trim() || isLoading) {
+      console.log('[ChatView] Early return - query empty or loading');
+      return;
+    }
 
     const userMessageContent = query.trim();
     setQuery('');
@@ -305,7 +322,7 @@ const ChatView: React.FC<ChatViewProps> = ({
     setError(null);
     isSubmittingRef.current = true;
 
-    console.log('handleSubmit - activeSessionId:', activeSessionId, 'isNewChatMode:', isNewChatModeRef.current);
+    console.log('[ChatView] handleSubmit - activeSessionId:', activeSessionId, 'isNewChatMode:', isNewChatModeRef.current);
 
     try {
       let currentSessionId = activeSessionId;
@@ -530,19 +547,31 @@ const ChatView: React.FC<ChatViewProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="w-full space-y-6 mt-4">
-                {messages.map((message) => (
+              <div className="w-full space-y-4 mt-4">
+                {/* Debug: Show message count */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="text-[10px] text-[var(--text-muted)] text-center opacity-50">
+                    {messages.length} message(s) loaded
+                  </div>
+                )}
+                {messages.map((message, index) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[80%] p-4 rounded-2xl ${
+                      className={`max-w-[80%] p-4 rounded-2xl shadow-md ${
                         message.role === 'user'
                           ? 'bg-[var(--accent-blue)] text-white'
                           : 'bg-[var(--bg-panel)] border border-[var(--border-color)] text-[var(--text-primary)]'
                       }`}
                     >
+                      {/* Debug: Show message index and role */}
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-[8px] opacity-50 mb-1">
+                          #{index + 1} ({message.role})
+                        </div>
+                      )}
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                     </div>
                   </div>
@@ -609,6 +638,13 @@ const ChatView: React.FC<ChatViewProps> = ({
                 type="text" 
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isLoading && query.trim()) {
+                    console.log('[ChatView] Enter key pressed, calling handleSubmit');
+                    e.preventDefault();
+                    handleSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
                 placeholder={viewMode === 'project_chat' ? "Ask anything about your project..." : "Ask anything globally..."} 
                 disabled={isLoading}
                 className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium px-6 py-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] disabled:opacity-50 h-14"

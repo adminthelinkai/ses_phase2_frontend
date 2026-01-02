@@ -13,6 +13,7 @@ import {
 interface HODAssignmentModalProps {
   projectId: string;
   projectName: string;
+  isReadOnly?: boolean;  // true for non-PM users - shows only assigned, no editing
   onClose: () => void;
   onComplete?: () => void;
 }
@@ -23,16 +24,21 @@ const HODRow = memo(({
   isSelected,
   isOriginallyAssigned,
   onToggle,
+  isReadOnly = false,
 }: {
   hod: ParticipantFull;
   isSelected: boolean;
   isOriginallyAssigned: boolean;
   onToggle: () => void;
+  isReadOnly?: boolean;
 }) => {
   const displayName = DISCIPLINE_DISPLAY_NAMES[hod.discipline] || hod.discipline;
   
-  // Determine status for visual indicator
+  // Determine status for visual indicator (simplified in read-only mode)
   const getStatusInfo = () => {
+    if (isReadOnly) {
+      return { label: 'ASSIGNED', color: 'emerald', icon: '✓' };
+    }
     if (isOriginallyAssigned && isSelected) {
       return { label: 'ASSIGNED', color: 'emerald', icon: '✓' };
     } else if (isOriginallyAssigned && !isSelected) {
@@ -44,6 +50,49 @@ const HODRow = memo(({
   };
   
   const status = getStatusInfo();
+
+  // In read-only mode, render as a non-interactive div
+  if (isReadOnly) {
+    return (
+      <div
+        className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-[var(--border-color)]/50 last:border-b-0 bg-emerald-500/5"
+      >
+        {/* HOD Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] font-bold text-[var(--text-primary)]">
+              {hod.name}
+            </span>
+            {hod.designation_code === 'PM' ? (
+              <span className="text-[7px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
+                PM
+              </span>
+            ) : (
+              <span className="text-[7px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
+                HOD
+              </span>
+            )}
+            <span className="text-[6px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest flex-shrink-0 text-emerald-600 bg-emerald-500/20">
+              ✓ ASSIGNED
+            </span>
+          </div>
+          <p className="text-[10px] font-medium text-[var(--text-muted)] mt-0.5">
+            {hod.designation}
+          </p>
+        </div>
+
+        {/* Department Badge */}
+        <div className="flex flex-col items-end flex-shrink-0">
+          <span className="text-[8px] font-mono font-bold text-[var(--text-muted)] bg-[var(--bg-sidebar)] px-2 py-1 rounded">
+            {hod.participant_key}
+          </span>
+          <span className="text-[7px] font-bold text-[var(--text-muted)] mt-1 uppercase tracking-wide">
+            {displayName}
+          </span>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <button
@@ -82,9 +131,15 @@ const HODRow = memo(({
           <span className="text-[12px] font-bold text-[var(--text-primary)]">
             {hod.name}
           </span>
-          <span className="text-[7px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
-            HOD
-          </span>
+          {hod.designation_code === 'PM' ? (
+            <span className="text-[7px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
+              PM
+            </span>
+          ) : (
+            <span className="text-[7px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0">
+              HOD
+            </span>
+          )}
           {/* Status Badge */}
           <span className={`text-[6px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest flex-shrink-0 ${
             status.color === 'emerald' 
@@ -141,6 +196,7 @@ LoadingSkeleton.displayName = 'LoadingSkeleton';
 const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
   projectId,
   projectName,
+  isReadOnly = false,
   onClose,
   onComplete,
 }) => {
@@ -176,7 +232,7 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
       } catch (error) {
         console.error('Error fetching HODs:', error);
         if (mounted) {
-          showToast('Failed to load HODs', 'error');
+          showToast('Failed to load PM & HODs', 'error');
         }
       } finally {
         if (mounted) {
@@ -222,16 +278,16 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
       );
 
       if (result.success) {
-        showToast(`Successfully updated ${result.count} HOD assignments`, 'success');
+        showToast(`Successfully updated ${result.count} assignments`, 'success');
         if (onComplete) {
           onComplete();
         }
         onClose();
       } else {
-        showToast(result.error || 'Failed to update HOD assignments', 'error');
+        showToast(result.error || 'Failed to update assignments', 'error');
       }
     } catch (error) {
-      console.error('Error updating HOD assignments:', error);
+      console.error('Error updating PM & HOD assignments:', error);
       showToast('An unexpected error occurred', 'error');
     } finally {
       setIsSubmitting(false);
@@ -275,7 +331,7 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
               <h2 className="text-[13px] font-black text-[var(--text-primary)] uppercase tracking-tight">
-                Manage HODs
+                Manage PM & HODs
               </h2>
             </div>
             <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1 truncate pl-7">
@@ -294,7 +350,7 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
         </div>
 
         {/* Content - Split View */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {isLoading ? (
             <LoadingSkeleton />
           ) : allHODs.length === 0 ? (
@@ -308,100 +364,165 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
-                No HODs available
+                No PM or HODs available
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 h-full divide-x divide-[var(--border-color)]">
-              {/* LEFT PANEL - Currently Assigned HODs */}
-              <div className="flex flex-col h-full overflow-hidden">
+            <div className={`flex flex-1 min-h-0 ${isReadOnly ? '' : 'divide-x divide-[var(--border-color)]'}`}>
+              {/* LEFT PANEL - Currently Assigned HODs (full width in read-only mode) */}
+              <div className="flex flex-col flex-1 min-h-0">
                 <div className="px-4 py-3 bg-emerald-500/10 border-b border-[var(--border-color)] flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
                     <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                      Assigned to Project
+                      {isReadOnly ? 'Assigned PM & HODs' : 'Assigned to Project'}
                     </span>
                     <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/20 px-2 py-0.5 rounded-full ml-auto">
                       {selectedIds.size}
                     </span>
                   </div>
-                  <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1">
-                    Uncheck to remove from project
-                  </p>
+                  {!isReadOnly && (
+                    <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1">
+                      Uncheck to remove from project
+                    </p>
+                  )}
                 </div>
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto min-h-0">
                   {Array.from(selectedIds).length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-12 px-6">
                       <svg className="w-10 h-10 text-[var(--text-muted)]/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                       </svg>
                       <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-widest text-center">
-                        No HODs assigned
+                        No PM or HODs assigned
                       </p>
                       <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1 text-center">
-                        Select HODs from the right panel
+                        Select PM or HODs from the right panel
                       </p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-[var(--border-color)]/50">
-                      {allHODs.filter(hod => selectedIds.has(hod.participant_id)).map((hod) => (
-                        <HODRow
-                          key={hod.participant_id}
-                          hod={hod}
-                          isSelected={true}
-                          isOriginallyAssigned={originallyAssignedIds.has(hod.participant_id)}
-                          onToggle={() => handleToggleHOD(hod.participant_id)}
-                        />
-                      ))}
+                    <div className="divide-y divide-[var(--border-color)]/30">
+                      {/* Group by discipline/department */}
+                      {sortedDisciplines.map((discipline) => {
+                        const assignedInDiscipline = groupedHODs[discipline]?.filter(
+                          hod => selectedIds.has(hod.participant_id)
+                        ) || [];
+                        
+                        if (assignedInDiscipline.length === 0) return null;
+                        
+                        const displayName = DISCIPLINE_DISPLAY_NAMES[discipline] || discipline;
+                        
+                        return (
+                          <div key={discipline} className="border-b border-[var(--border-color)]/30 last:border-b-0">
+                            {/* Department Header */}
+                            <div className="px-4 py-2 bg-emerald-500/5 sticky top-0 z-10">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                <span className="text-[8px] font-black text-[var(--text-muted)] uppercase tracking-widest">
+                                  {displayName}
+                                </span>
+                                <span className="text-[7px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded ml-auto">
+                                  {assignedInDiscipline.length}
+                                </span>
+                              </div>
+                            </div>
+                            {/* HODs in this department */}
+                            <div className="divide-y divide-[var(--border-color)]/20">
+                              {assignedInDiscipline.map((hod) => (
+                                <HODRow
+                                  key={hod.participant_id}
+                                  hod={hod}
+                                  isSelected={true}
+                                  isOriginallyAssigned={originallyAssignedIds.has(hod.participant_id)}
+                                  onToggle={() => handleToggleHOD(hod.participant_id)}
+                                  isReadOnly={isReadOnly}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* RIGHT PANEL - Available HODs */}
-              <div className="flex flex-col h-full overflow-hidden">
-                <div className="px-4 py-3 bg-blue-500/10 border-b border-[var(--border-color)] flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
-                      Available HODs
-                    </span>
-                    <span className="text-[9px] font-bold text-blue-500 bg-blue-500/20 px-2 py-0.5 rounded-full ml-auto">
-                      {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length}
-                    </span>
+              {/* RIGHT PANEL - Available HODs (hidden in read-only mode) */}
+              {!isReadOnly && (
+                <div className="flex flex-col flex-1 min-h-0">
+                  <div className="px-4 py-3 bg-blue-500/10 border-b border-[var(--border-color)] flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                        Available PM & HODs
+                      </span>
+                      <span className="text-[9px] font-bold text-blue-500 bg-blue-500/20 px-2 py-0.5 rounded-full ml-auto">
+                        {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length}
+                      </span>
+                    </div>
+                    <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1">
+                      Check to add to project
+                    </p>
                   </div>
-                  <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1">
-                    Check to add to project
-                  </p>
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full py-12 px-6">
+                        <svg className="w-10 h-10 text-emerald-500/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest text-center">
+                          All PM & HODs Assigned
+                        </p>
+                        <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1 text-center">
+                          Every available PM and HOD is assigned to this project
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--border-color)]/30">
+                        {/* Group by discipline/department */}
+                        {sortedDisciplines.map((discipline) => {
+                          const availableInDiscipline = groupedHODs[discipline]?.filter(
+                            hod => !selectedIds.has(hod.participant_id)
+                          ) || [];
+                          
+                          if (availableInDiscipline.length === 0) return null;
+                          
+                          const displayName = DISCIPLINE_DISPLAY_NAMES[discipline] || discipline;
+                          
+                          return (
+                            <div key={discipline} className="border-b border-[var(--border-color)]/30 last:border-b-0">
+                              {/* Department Header */}
+                              <div className="px-4 py-2 bg-[var(--bg-panel)]/50 sticky top-0 z-10">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                  <span className="text-[8px] font-black text-[var(--text-muted)] uppercase tracking-widest">
+                                    {displayName}
+                                  </span>
+                                  <span className="text-[7px] font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded ml-auto">
+                                    {availableInDiscipline.length}
+                                  </span>
+                                </div>
+                              </div>
+                              {/* HODs in this department */}
+                              <div className="divide-y divide-[var(--border-color)]/20">
+                                {availableInDiscipline.map((hod) => (
+                                  <HODRow
+                                    key={hod.participant_id}
+                                    hod={hod}
+                                    isSelected={false}
+                                    isOriginallyAssigned={originallyAssignedIds.has(hod.participant_id)}
+                                    onToggle={() => handleToggleHOD(hod.participant_id)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                  {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-12 px-6">
-                      <svg className="w-10 h-10 text-emerald-500/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest text-center">
-                        All HODs Assigned
-                      </p>
-                      <p className="text-[8px] font-medium text-[var(--text-muted)] mt-1 text-center">
-                        Every available HOD is assigned to this project
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-[var(--border-color)]/50">
-                      {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).map((hod) => (
-                        <HODRow
-                          key={hod.participant_id}
-                          hod={hod}
-                          isSelected={false}
-                          isOriginallyAssigned={originallyAssignedIds.has(hod.participant_id)}
-                          onToggle={() => handleToggleHOD(hod.participant_id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -417,19 +538,29 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
                   {selectedIds.size} Assigned
                 </span>
               </div>
-              <span className="text-[var(--text-muted)]">|</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="text-[10px] font-bold text-blue-500">
-                  {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length} Available
-                </span>
-              </div>
+              {!isReadOnly && (
+                <>
+                  <span className="text-[var(--text-muted)]">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-[10px] font-bold text-blue-500">
+                      {allHODs.filter(hod => !selectedIds.has(hod.participant_id)).length} Available
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-            {/* Changes indicator */}
-            {(Array.from(selectedIds).filter(id => !originallyAssignedIds.has(id)).length > 0 ||
+            {/* Changes indicator - only in edit mode */}
+            {!isReadOnly && (Array.from(selectedIds).filter(id => !originallyAssignedIds.has(id)).length > 0 ||
               Array.from(originallyAssignedIds).filter(id => !selectedIds.has(id)).length > 0) && (
               <span className="text-[8px] font-bold text-amber-500 bg-amber-500/20 px-2 py-1 rounded uppercase tracking-wider">
                 Unsaved Changes
+              </span>
+            )}
+            {/* Read-only indicator */}
+            {isReadOnly && (
+              <span className="text-[8px] font-bold text-[var(--text-muted)] bg-[var(--bg-panel)] px-2 py-1 rounded uppercase tracking-wider">
+                View Only
               </span>
             )}
           </div>
@@ -441,28 +572,30 @@ const HODAssignmentModal: React.FC<HODAssignmentModalProps> = memo(({
               disabled={isSubmitting}
               className="px-5 py-2.5 border border-[var(--border-color)] rounded-xl text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] transition-all disabled:opacity-50"
             >
-              Cancel
+              {isReadOnly ? 'Close' : 'Cancel'}
             </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSubmitting}
-              className="px-5 py-2.5 bg-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest text-white hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Save Changes
-                </>
-              )}
-            </button>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest text-white hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Changes
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

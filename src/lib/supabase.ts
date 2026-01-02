@@ -5,16 +5,21 @@ const supabaseAnonKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Types for team_members table
-export interface TeamMember {
-  id: string;
+// Types for participants table (used for authentication)
+export interface ParticipantAuth {
+  participant_id: string;
+  participant_key: string;
+  name: string;
   email: string;
   password: string;
-  department: string | null;
-  role: string | null;
-  participant_id: string | null;
-  created_at: string;
-  updated_at: string;
+  discipline: string | null;
+  designation: string | null;
+  is_hod: boolean | null;
+  department_id: string | null;
+  designation_id: string | null;
+  // Joined fields from related tables
+  designation_title?: string | null;  // From designations.title
+  department_code?: string | null;    // From departments.code
 }
 
 // Types for chat sessions
@@ -293,6 +298,8 @@ export interface Participant {
   name: string;
   discipline: string;
   designation: string;
+  email: string;
+  password: string;
 }
 
 // Department to discipline mapping
@@ -380,7 +387,7 @@ export interface ProjectAssignment {
 
 /**
  * Get projects assigned to a participant
- * Uses RPC function to bypass RLS
+ * Uses direct JOIN query on participant_project_assignments and projects tables
  */
 export async function getAssignedProjects(participantId: string): Promise<BackendProject[]> {
   console.log('[Supabase] getAssignedProjects called with:', participantId);
@@ -390,12 +397,24 @@ export async function getAssignedProjects(participantId: string): Promise<Backen
     return [];
   }
 
-  // Use RPC function that bypasses RLS
-  console.log('[Supabase] Calling get_participant_projects RPC for:', participantId);
+  // Direct JOIN query to get assigned projects
+  console.log('[Supabase] Querying participant_project_assignments for:', participantId);
   const { data, error } = await supabase
-    .rpc('get_participant_projects', { p_participant_id: participantId });
+    .from('participant_project_assignments')
+    .select(`
+      project_id,
+      projects:project_id (
+        project_id,
+        name,
+        description,
+        client_name,
+        status
+      )
+    `)
+    .eq('participant_id', participantId)
+    .eq('is_active', true);
 
-  console.log('[Supabase] RPC result:', { data, error });
+  console.log('[Supabase] Query result:', { data, error });
 
   if (error) {
     console.error('[Supabase] Error fetching assigned projects:', error);
@@ -407,7 +426,21 @@ export async function getAssignedProjects(participantId: string): Promise<Backen
     return [];
   }
 
-  return data as BackendProject[];
+  // Transform nested response to BackendProject[] format
+  interface AssignmentWithProject {
+    project_id: string;
+    projects: BackendProject | BackendProject[] | null;
+  }
+
+  const projects = (data as AssignmentWithProject[])
+    .map((item) => {
+      const project = Array.isArray(item.projects) ? item.projects[0] : item.projects;
+      return project;
+    })
+    .filter((p): p is BackendProject => p !== null && p !== undefined);
+
+  console.log('[Supabase] Transformed projects:', projects);
+  return projects;
 }
 
 /**
@@ -436,6 +469,7 @@ export interface ParticipantFull {
   name: string;
   discipline: string;
   designation: string;
+  designation_code?: string;  // 'PM' | 'HOD' | etc. - from designations table
   is_hod: boolean;
   seniority_level: string | null;
 }
@@ -615,7 +649,16 @@ export async function getProjectParticipants(projectId: string): Promise<Partici
 export async function getAllHODs(): Promise<ParticipantFull[]> {
   const { data, error } = await supabase
     .from('participants')
-    .select('participant_id, participant_key, name, discipline, designation, is_hod, seniority_level')
+    .select(`
+      participant_id,
+      participant_key,
+      name,
+      discipline,
+      designation,
+      is_hod,
+      seniority_level,
+      designations!left(code)
+    `)
     .eq('is_hod', true)
     .order('discipline', { ascending: true })
     .order('name', { ascending: true });
@@ -625,7 +668,33 @@ export async function getAllHODs(): Promise<ParticipantFull[]> {
     return [];
   }
 
-  return (data || []) as ParticipantFull[];
+  // Transform data to flatten designation_code
+  interface ParticipantWithDesignation {
+    participant_id: string;
+    participant_key: string;
+    name: string;
+    discipline: string;
+    designation: string;
+    is_hod: boolean;
+    seniority_level: string | null;
+    designations: { code: string } | { code: string }[] | null;
+  }
+
+  return (data || []).map((item: ParticipantWithDesignation) => {
+    const designationData = Array.isArray(item.designations) 
+      ? item.designations[0] 
+      : item.designations;
+    return {
+      participant_id: item.participant_id,
+      participant_key: item.participant_key,
+      name: item.name,
+      discipline: item.discipline,
+      designation: item.designation,
+      designation_code: designationData?.code || undefined,
+      is_hod: item.is_hod,
+      seniority_level: item.seniority_level,
+    };
+  }) as ParticipantFull[];
 }
 
 /**
@@ -647,7 +716,8 @@ export async function getProjectAssignedHODs(projectId: string): Promise<Partici
         discipline,
         designation,
         is_hod,
-        seniority_level
+        seniority_level,
+        designations!left(code)
       )
     `)
     .eq('project_id', projectId)
@@ -658,10 +728,21 @@ export async function getProjectAssignedHODs(projectId: string): Promise<Partici
     return [];
   }
 
-  // Flatten and filter to only HODs
+  // Flatten and filter to only HODs, extracting designation_code
+  interface ParticipantWithDesignation {
+    participant_id: string;
+    participant_key: string;
+    name: string;
+    discipline: string;
+    designation: string;
+    is_hod: boolean;
+    seniority_level: string | null;
+    designations: { code: string } | { code: string }[] | null;
+  }
+
   interface AssignmentWithParticipant {
     participant_id: string;
-    participants: ParticipantFull | ParticipantFull[];
+    participants: ParticipantWithDesignation | ParticipantWithDesignation[];
   }
   
   return (data || [])
@@ -669,7 +750,22 @@ export async function getProjectAssignedHODs(projectId: string): Promise<Partici
       const participant = Array.isArray(item.participants) 
         ? item.participants[0] 
         : item.participants;
-      return participant;
+      if (!participant) return null;
+      
+      const designationData = Array.isArray(participant.designations) 
+        ? participant.designations[0] 
+        : participant.designations;
+      
+      return {
+        participant_id: participant.participant_id,
+        participant_key: participant.participant_key,
+        name: participant.name,
+        discipline: participant.discipline,
+        designation: participant.designation,
+        designation_code: designationData?.code || undefined,
+        is_hod: participant.is_hod,
+        seniority_level: participant.seniority_level,
+      } as ParticipantFull;
     })
     .filter((p): p is ParticipantFull => p !== null && p !== undefined && p.is_hod === true);
 }
