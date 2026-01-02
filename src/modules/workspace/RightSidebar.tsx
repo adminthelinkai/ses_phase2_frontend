@@ -7,6 +7,7 @@ import { Department, Role } from '../../types';
 const ProjectTreeView = lazy(() => import('./ProjectTreeView'));
 const PanZoomCanvas = lazy(() => import('../../components/canvas'));
 const HODAssignmentModal = lazy(() => import('../projects/HODAssignmentModal'));
+const TeamMemberAssignmentModal = lazy(() => import('../projects/TeamMemberAssignmentModal'));
 
 interface RightSidebarProps {
   width: number;
@@ -30,6 +31,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<'project' | 'deliverable'>('deliverable');
   const [hodModalProject, setHodModalProject] = useState<{ id: string; name: string } | null>(null);
+  const [teamMemberModal, setTeamMemberModal] = useState<{ projectId: string; projectName: string; discipline: string } | null>(null);
   
   const completedCount = props.nodes.filter(n => n.status === 'completed').length;
   const progressPercent = props.nodes.length > 0 ? (completedCount / props.nodes.length) * 100 : 0;
@@ -53,6 +55,31 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   // Close HOD modal
   const handleCloseHodModal = useCallback(() => {
     setHodModalProject(null);
+  }, []);
+
+  // Handle HOD assignment completion - refresh will happen naturally on next render
+  const handleHODAssignmentComplete = useCallback(() => {
+    // After HOD assignments are saved, the backend will have updated the assignments
+    // The ProjectTreeView will automatically refetch when it re-renders
+    // We don't need to do anything special here as the data is fetched from the database
+    console.log('[RightSidebar] HOD assignments updated, ProjectTreeView will refresh on next render');
+  }, []);
+
+  // Handle team member node click - open team member assignment modal
+  const handleTeamMemberClick = useCallback((projectId: string, projectName: string, discipline: string) => {
+    setTeamMemberModal({ projectId, projectName, discipline });
+  }, []);
+
+  // Close team member modal
+  const handleCloseTeamMemberModal = useCallback(() => {
+    setTeamMemberModal(null);
+  }, []);
+
+  // Handle team member assignment completion
+  const handleTeamMemberAssignmentComplete = useCallback(() => {
+    // After team member assignments are saved, the backend will have updated the assignments
+    // The ProjectTreeView will automatically refetch when it re-renders
+    console.log('[RightSidebar] Team member assignments updated, ProjectTreeView will refresh on next render');
   }, []);
 
   const commands = [
@@ -144,6 +171,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
                     setViewMode('deliverable');
                   }}
                   onTeamNodeClick={handleTeamNodeClick}
+                  onTeamMemberClick={handleTeamMemberClick}
                   newProjectData={props.newProjectData}
                 />
               </PanZoomCanvas>
@@ -306,6 +334,24 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
             projectName={hodModalProject.name}
             isReadOnly={!canEditHODs}
             onClose={handleCloseHodModal}
+            onComplete={handleHODAssignmentComplete}
+          />
+        </Suspense>
+      )}
+
+      {/* Team Member Assignment Modal - Lazy loaded for code splitting */}
+      {teamMemberModal && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <TeamMemberAssignmentModal
+            projectId={teamMemberModal.projectId}
+            projectName={teamMemberModal.projectName}
+            discipline={teamMemberModal.discipline}
+            onClose={handleCloseTeamMemberModal}
+            onComplete={handleTeamMemberAssignmentComplete}
           />
         </Suspense>
       )}

@@ -18,8 +18,17 @@ export interface CreateProjectPayload {
 export interface CreateProjectResponse {
   success: boolean;
   data?: {
-    id: string;
+    project_id: string;  // Primary field from API response
+    id?: string;         // Alias for backward compatibility
     name: string;
+    description?: string;
+    client_name?: string;
+    contract_reference?: string;
+    start_date?: string;
+    end_date?: string;
+    status?: string;
+    created_at?: string;
+    updated_at?: string;
     [key: string]: unknown;
   };
   error?: string;

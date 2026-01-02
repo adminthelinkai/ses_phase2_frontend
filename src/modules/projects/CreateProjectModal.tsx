@@ -100,10 +100,23 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
       const result = await createProject(payload);
 
       if (result.success && result.data) {
+        // Extract project_id from response (primary field from API)
+        const projectId = result.data.project_id || result.data.id;
+        
+        if (!projectId) {
+          throw new Error('Project ID not found in API response');
+        }
+
+        console.log('[CreateProject] Project created successfully:', {
+          project_id: projectId,
+          name: result.data.name,
+          response: result.data,
+        });
+
         showToast('Project created successfully', 'success');
         // Pass project data to parent for team assignment
         onSuccess({
-          id: result.data.id || result.data.project_id as string,
+          id: projectId,
           name: result.data.name || formData.name,
         });
         // Don't close here - parent will close after team assignment flow

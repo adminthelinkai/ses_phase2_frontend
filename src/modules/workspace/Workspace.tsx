@@ -133,114 +133,105 @@ const Workspace = () => {
     return assignedProjects.length > 0 ? assignedProjects : staticProjects;
   }, [assignedProjects]);
 
-  // Initialize state from URL params or localStorage
-  const initializeState = (): { project: Project; deliverableId: string; nodeId: string | null } => {
-    // Try URL params first
-    const projectId = searchParams.get('project') || location.state?.projectId;
-    const urlDeliverableId = searchParams.get('deliverable');
-    const urlNodeId = searchParams.get('node');
-
-    if (projectId) {
-      const project = availableProjects.find(p => p.id === projectId) || availableProjects[0];
-      if (!project) {
-        return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
-      }
-      const deliverables = deliverablesMap[project.id] || [];
-      const defaultDeliverableId = urlDeliverableId && deliverables.find(d => d.id === urlDeliverableId) 
-        ? urlDeliverableId 
-        : deliverables[0]?.id || '';
-      
-      const nodes = deliverableWorkflows[defaultDeliverableId] || [];
-      const defaultNodeId = urlNodeId && nodes.find(n => n.id === urlNodeId) 
-        ? urlNodeId 
-        : nodes[0]?.id || null;
-
-      return { project, deliverableId: defaultDeliverableId, nodeId: defaultNodeId };
-    }
-
-    // Fallback to localStorage
-    const saved = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-    if (saved) {
-      try {
-        const state = JSON.parse(saved);
-        const project = availableProjects.find(p => p.id === state.projectId) || availableProjects[0];
-        if (!project) {
-          return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
-        }
-        const deliverables = deliverablesMap[project.id] || [];
-        const savedDeliverableId = state.deliverableId && deliverables.find(d => d.id === state.deliverableId)
-          ? state.deliverableId
-          : deliverables[0]?.id || '';
-        const nodes = deliverableWorkflows[savedDeliverableId] || [];
-        const savedNodeId = state.nodeId && nodes.find(n => n.id === state.nodeId)
-          ? state.nodeId
-          : nodes[0]?.id || null;
-        return { project, deliverableId: savedDeliverableId, nodeId: savedNodeId };
-      } catch {
-        // Fall through to default
-      }
-    }
-
-    // Default state
-    const project = availableProjects[0];
-    if (!project) {
-      return { project: { id: '', name: 'No Project', status: 'active' }, deliverableId: '', nodeId: null };
-    }
-    const deliverables = deliverablesMap[project.id] || [];
-    const defaultDeliverableId = deliverables[0]?.id || '';
-    const nodes = deliverableWorkflows[defaultDeliverableId] || [];
-    const defaultNodeId = nodes[0]?.id || null;
-    return { project, deliverableId: defaultDeliverableId, nodeId: defaultNodeId };
-  };
-
-  const initialState = useMemo(() => initializeState(), [searchParams, location.state, availableProjects]);
+  // Track if we've initialized from URL (to prevent re-initialization)
+  const hasInitializedFromUrl = useRef(false);
   
-  // Core State - initialize from URL/localStorage
-  const [activeProject, setActiveProject] = useState<Project>(initialState.project);
-  const [activeDeliverableId, setActiveDeliverableId] = useState<string>(initialState.deliverableId);
-  const [activeNodeId, setActiveNodeId] = useState<string | null>(initialState.nodeId);
+  // Store initial URL params before they get overwritten
+  const initialUrlParams = useRef({
+    projectId: searchParams.get('project') || location.state?.projectId || null,
+    deliverableId: searchParams.get('deliverable') || null,
+    nodeId: searchParams.get('node') || null,
+  });
+  
+  // Core State - start with placeholder, will be set when projects load
+  const [activeProject, setActiveProject] = useState<Project>({ id: '', name: 'Loading...', status: 'active' });
+  const [activeDeliverableId, setActiveDeliverableId] = useState<string>('');
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [isStateInitialized, setIsStateInitialized] = useState(false);
 
-  // Update state when URL params change (e.g., on refresh or direct navigation)
-  // Only update if URL params differ from current state to avoid loops
+  // Initialize state from URL/localStorage AFTER projects have loaded
   useEffect(() => {
-    const urlProjectId = searchParams.get('project') || location.state?.projectId;
-    const urlDeliverableId = searchParams.get('deliverable');
-    const urlNodeId = searchParams.get('node');
-    
-    // Only update if URL params are different from current state
-    if (urlProjectId && urlProjectId !== activeProject.id) {
-      const project = availableProjects.find(p => p.id === urlProjectId);
-      if (project) {
-        setActiveProject(project);
-      }
+    // Wait for projects to load
+    if (isLoadingProjects || availableProjects.length === 0) {
+      return;
     }
     
-    if (urlDeliverableId && urlDeliverableId !== activeDeliverableId) {
-      const deliverables = deliverablesMap[activeProject.id] || [];
-      if (deliverables.find(d => d.id === urlDeliverableId)) {
-        setActiveDeliverableId(urlDeliverableId);
+    // Only initialize once
+    if (hasInitializedFromUrl.current) {
+      return;
+    }
+    hasInitializedFromUrl.current = true;
+    
+    // Try URL params first (from initial load)
+    const urlProjectId = initialUrlParams.current.projectId;
+    const urlDeliverableId = initialUrlParams.current.deliverableId;
+    const urlNodeId = initialUrlParams.current.nodeId;
+    
+    let selectedProject: Project | undefined;
+    let selectedDeliverableId: string = '';
+    let selectedNodeId: string | null = null;
+    
+    if (urlProjectId) {
+      selectedProject = availableProjects.find(p => p.id === urlProjectId);
+    }
+    
+    // If not found in URL, try localStorage
+    if (!selectedProject) {
+      const saved = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          selectedProject = availableProjects.find(p => p.id === state.projectId);
+          if (selectedProject && !urlDeliverableId) {
+            selectedDeliverableId = state.deliverableId || '';
+          }
+          if (selectedProject && !urlNodeId) {
+            selectedNodeId = state.nodeId || null;
+          }
+        } catch {
+          // Ignore parse errors
+        }
       }
     }
     
-    if (urlNodeId && urlNodeId !== activeNodeId) {
-      const nodes = deliverableWorkflows[activeDeliverableId] || [];
-      if (nodes.find(n => n.id === urlNodeId)) {
-        setActiveNodeId(urlNodeId);
-      }
+    // Default to first project if nothing found
+    if (!selectedProject) {
+      selectedProject = availableProjects[0];
     }
-  }, [searchParams, location.state, availableProjects]); // Only depend on URL, not state
-
-  // Update active project when assigned projects load
-  useEffect(() => {
-    if (!isLoadingProjects && availableProjects.length > 0 && !availableProjects.find(p => p.id === activeProject.id)) {
-      const firstProject = availableProjects[0];
-      setActiveProject(firstProject);
-      const deliverables = deliverablesMap[firstProject.id] || [];
-      if (deliverables.length > 0) {
-        setActiveDeliverableId(deliverables[0].id);
-        setActiveNodeId(deliverableWorkflows[deliverables[0].id]?.[0]?.id || null);
-      }
+    
+    if (!selectedProject) {
+      setIsStateInitialized(true);
+      return;
     }
+    
+    // Set project
+    setActiveProject(selectedProject);
+    
+    // Set deliverable
+    const deliverables = deliverablesMap[selectedProject.id] || [];
+    const finalDeliverableId = urlDeliverableId && deliverables.find(d => d.id === urlDeliverableId)
+      ? urlDeliverableId
+      : selectedDeliverableId && deliverables.find(d => d.id === selectedDeliverableId)
+        ? selectedDeliverableId
+        : deliverables[0]?.id || '';
+    setActiveDeliverableId(finalDeliverableId);
+    
+    // Set node
+    const nodes = deliverableWorkflows[finalDeliverableId] || [];
+    const finalNodeId = urlNodeId && nodes.find(n => n.id === urlNodeId)
+      ? urlNodeId
+      : selectedNodeId && nodes.find(n => n.id === selectedNodeId)
+        ? selectedNodeId
+        : nodes[0]?.id || null;
+    setActiveNodeId(finalNodeId);
+    
+    setIsStateInitialized(true);
+    
+    console.log('[Workspace] State initialized from URL/localStorage:', {
+      project: selectedProject.name,
+      deliverable: finalDeliverableId,
+      node: finalNodeId,
+    });
   }, [isLoadingProjects, availableProjects]);
 
   // Derived Data
@@ -255,6 +246,11 @@ const Workspace = () => {
 
   // Persist workspace state to localStorage and URL
   useEffect(() => {
+    // Don't persist until state is initialized (prevents overwriting URL on load)
+    if (!isStateInitialized || !activeProject.id) {
+      return;
+    }
+    
     const state = {
       projectId: activeProject.id,
       deliverableId: activeDeliverableId,
@@ -266,12 +262,14 @@ const Workspace = () => {
     // Update URL params
     const params = new URLSearchParams();
     params.set('project', activeProject.id);
-    params.set('deliverable', activeDeliverableId);
+    if (activeDeliverableId) {
+      params.set('deliverable', activeDeliverableId);
+    }
     if (activeNodeId) {
       params.set('node', activeNodeId);
     }
     setSearchParams(params, { replace: true });
-  }, [activeProject.id, activeDeliverableId, activeNodeId, viewMode, setSearchParams]);
+  }, [activeProject.id, activeDeliverableId, activeNodeId, viewMode, setSearchParams, isStateInitialized]);
 
   // Resizing Handlers
   useEffect(() => {

@@ -1023,3 +1023,245 @@ export async function updateProjectHODs(
   }
 }
 
+/**
+ * Get all team members (non-HODs) from a specific department
+ */
+export async function getDepartmentTeamMembers(discipline: string): Promise<ParticipantFull[]> {
+  if (!discipline) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('participants')
+    .select(`
+      participant_id,
+      participant_key,
+      name,
+      discipline,
+      designation,
+      is_hod,
+      seniority_level,
+      designations!left(code)
+    `)
+    .eq('discipline', discipline)
+    .eq('is_hod', false)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('[Supabase] Error fetching department team members:', error);
+    return [];
+  }
+
+  // Transform data to flatten designation_code
+  interface ParticipantWithDesignation {
+    participant_id: string;
+    participant_key: string;
+    name: string;
+    discipline: string;
+    designation: string;
+    is_hod: boolean;
+    seniority_level: string | null;
+    designations: { code: string } | { code: string }[] | null;
+  }
+
+  return (data || []).map((p: ParticipantWithDesignation) => {
+    const designationData = Array.isArray(p.designations) ? p.designations[0] : p.designations;
+    return {
+      ...p,
+      designation_code: designationData?.code || undefined,
+    };
+  }) as ParticipantFull[];
+}
+
+/**
+ * Get assigned team members for a project from a specific department
+ */
+export async function getProjectDepartmentTeamMembers(
+  projectId: string,
+  discipline: string
+): Promise<ParticipantFull[]> {
+  if (!projectId || !discipline) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('participant_project_assignments')
+    .select(`
+      participant_id,
+      participants!inner (
+        participant_id,
+        participant_key,
+        name,
+        discipline,
+        designation,
+        is_hod,
+        seniority_level,
+        designations!left(code)
+      )
+    `)
+    .eq('project_id', projectId)
+    .eq('is_active', true);
+
+  if (error) {
+    console.error('[Supabase] Error fetching project department team members:', error);
+    return [];
+  }
+
+  // Flatten and filter to only team members (non-HODs) from the specified department
+  interface ParticipantWithDesignation {
+    participant_id: string;
+    participant_key: string;
+    name: string;
+    discipline: string;
+    designation: string;
+    is_hod: boolean;
+    seniority_level: string | null;
+    designations: { code: string } | { code: string }[] | null;
+  }
+
+  interface AssignmentWithParticipant {
+    participant_id: string;
+    participants: ParticipantWithDesignation | ParticipantWithDesignation[];
+  }
+
+  return (data || [])
+    .map((item: AssignmentWithParticipant) => {
+      const participant = Array.isArray(item.participants) 
+        ? item.participants[0] 
+        : item.participants;
+      if (!participant) return null;
+      
+      const designationData = Array.isArray(participant.designations) 
+        ? participant.designations[0] 
+        : participant.designations;
+      
+      // Only include non-HODs from the specified department
+      if (participant.discipline === discipline && !participant.is_hod) {
+        return {
+          participant_id: participant.participant_id,
+          participant_key: participant.participant_key,
+          name: participant.name,
+          discipline: participant.discipline,
+          designation: participant.designation,
+          designation_code: designationData?.code || undefined,
+          is_hod: participant.is_hod,
+          seniority_level: participant.seniority_level,
+        } as ParticipantFull;
+      }
+      return null;
+    })
+    .filter((p): p is ParticipantFull => p !== null && p !== undefined)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Update team member assignments for a project from a specific department
+ */
+export async function updateProjectTeamMembers(
+  projectId: string,
+  discipline: string,
+  teamMemberParticipantIds: string[]
+): Promise<{ success: boolean; error?: string; count?: number }> {
+  if (!projectId || !discipline) {
+    return { success: false, error: 'Invalid project ID or discipline' };
+  }
+
+  try {
+    // Get all team members from this department to know which assignments are team-related
+    const allTeamMembers = await getDepartmentTeamMembers(discipline);
+    const teamMemberIds = allTeamMembers.map(tm => tm.participant_id);
+
+    // Check which team members are already assigned to this project
+    const { data: existingAssignments } = await supabase
+      .from('participant_project_assignments')
+      .select('assignment_id, participant_id, is_active')
+      .eq('project_id', projectId)
+      .in('participant_id', teamMemberIds);
+
+    const existingMap = new Map(
+      (existingAssignments || []).map(a => [a.participant_id, a])
+    );
+
+    // Determine which assignments to update and which to insert
+    const toActivate: string[] = []; // assignment_ids to set is_active = true
+    const toDeactivate: string[] = []; // assignment_ids to set is_active = false
+    const toInsert: string[] = []; // participant_ids to create new assignments
+
+    // For each team member, determine the action
+    for (const teamMemberId of teamMemberIds) {
+      const existing = existingMap.get(teamMemberId);
+      const shouldBeAssigned = teamMemberParticipantIds.includes(teamMemberId);
+
+      if (existing) {
+        // Assignment exists - update is_active status if needed
+        if (shouldBeAssigned && !existing.is_active) {
+          toActivate.push(existing.assignment_id);
+        } else if (!shouldBeAssigned && existing.is_active) {
+          toDeactivate.push(existing.assignment_id);
+        }
+      } else if (shouldBeAssigned) {
+        // No existing assignment, need to create one
+        toInsert.push(teamMemberId);
+      }
+    }
+
+    // Deactivate removed team members
+    if (toDeactivate.length > 0) {
+      const { error: deactivateError } = await supabase
+        .from('participant_project_assignments')
+        .update({ is_active: false })
+        .in('assignment_id', toDeactivate);
+
+      if (deactivateError) {
+        console.error('[Supabase] Error deactivating team member assignments:', deactivateError);
+        return { success: false, error: deactivateError.message };
+      }
+    }
+
+    // Activate previously deactivated team members
+    if (toActivate.length > 0) {
+      const { error: activateError } = await supabase
+        .from('participant_project_assignments')
+        .update({ is_active: true })
+        .in('assignment_id', toActivate);
+
+      if (activateError) {
+        console.error('[Supabase] Error activating team member assignments:', activateError);
+        return { success: false, error: activateError.message };
+      }
+    }
+
+    // Insert new team member assignments
+    if (toInsert.length > 0) {
+      const assignments = toInsert.map((participantId) => ({
+        assignment_id: crypto.randomUUID(),
+        participant_id: participantId,
+        project_id: projectId,
+        assigned_at: new Date().toISOString(),
+        is_active: true,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('participant_project_assignments')
+        .insert(assignments);
+
+      if (insertError) {
+        console.error('[Supabase] Error inserting team member assignments:', insertError);
+        return { success: false, error: insertError.message };
+      }
+    }
+
+    console.log('[Supabase] Successfully updated team member assignments:', {
+      discipline,
+      activated: toActivate.length,
+      deactivated: toDeactivate.length,
+      inserted: toInsert.length,
+    });
+    return { success: true, count: teamMemberParticipantIds.length };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[Supabase] Exception updating team member assignments:', err);
+    return { success: false, error: errorMessage };
+  }
+}
+
