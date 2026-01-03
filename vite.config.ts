@@ -23,6 +23,25 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, './src'),
         }
-      }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'react-vendor': ['react', 'react-dom'],
+              'markdown-vendor': ['react-markdown', 'remark-gfm'],
+              'syntax-highlighter': ['react-syntax-highlighter'],
+            },
+          },
+        },
+        chunkSizeWarningLimit: 1000,
+        sourcemap: mode === 'development',
+        minify: mode === 'production' ? 'terser' : false,
+        terserOptions: mode === 'production' ? {
+          compress: {
+            drop_console: true,
+          },
+        } : undefined,
+      },
     };
 });

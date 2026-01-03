@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, Suspense, lazy, useCallback, useMem
 import { sendProjectChatQuery, sendGlobalChatQuery } from '../../api/chat';
 import { Department } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import type { ChatInputHandle } from '../../components/ChatInput';
 import {
   ChatSession,
   ChatMessage,
@@ -24,6 +25,9 @@ import {
 const DepartmentBackgroundProvider = lazy(() => import('../../components/backgrounds/DepartmentBackgroundProvider'));
 const ChatSessionPanel = lazy(() => import('./ChatSessionPanel'));
 const MarkdownMessage = lazy(() => import('../../components/MarkdownMessage'));
+const MessageBubble = lazy(() => import('../../components/MessageBubble'));
+const ChatInput = lazy(() => import('../../components/ChatInput'));
+const LoadingIndicator = lazy(() => import('../../components/LoadingIndicator'));
 
 interface ChatViewProps {
   department?: Department;
@@ -158,7 +162,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<ChatInputHandle | null>(null);
 
   // Session management state
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -177,13 +181,16 @@ const ChatView: React.FC<ChatViewProps> = ({
   const currentParticipantId = useMemo(() => user?.participantId || '', [user?.participantId]);
   const currentProjectId = useMemo(() => projectId || '', [projectId]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Optimized scroll with requestAnimationFrame for better performance
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   // Load sessions when viewMode or projectId changes
   const loadSessions = useCallback(async (autoSelect: boolean = true) => {
@@ -258,14 +265,14 @@ const ChatView: React.FC<ChatViewProps> = ({
     setSessions([]);
   }, [projectId]);
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     isNewChatModeRef.current = true; // Prevent auto-selecting existing session
     setActiveSessionId(null);
     setMessages([]);
     setQuery('');
     setError(null);
-    inputRef.current?.focus();
-  };
+    setTimeout(() => chatInputRef.current?.focus(), 100);
+  }, []);
 
   const handleSessionSelect = (sessionId: string) => {
     isNewChatModeRef.current = false; // User selected a session, exit new chat mode
@@ -412,10 +419,24 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handlePromptClick = (prompt: string) => {
+  const handlePromptClick = useCallback((prompt: string) => {
     setQuery(prompt);
-    inputRef.current?.focus();
-  };
+    setTimeout(() => chatInputRef.current?.focus(), 100);
+  }, []);
+
+  const handleCopyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+  }, []);
+
+  const handleRegenerate = useCallback((messageId: string) => {
+    // TODO: Implement regenerate functionality
+    console.log('Regenerate message:', messageId);
+  }, []);
+
+  const handleEditMessage = useCallback((messageId: string, content: string) => {
+    // TODO: Implement edit message functionality
+    console.log('Edit message:', messageId, content);
+  }, []);
 
   const quickPrompts = getDepartmentPrompts(department);
   const userName = user?.name || 'Engineer';
@@ -505,8 +526,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                       <button 
                         key={index}
                         onClick={() => handlePromptClick(item.prompt)}
-                        className="group p-3 bg-[var(--bg-panel)]/70 backdrop-blur-md border border-[var(--border-color)] rounded-xl hover:border-[var(--accent-blue)] hover:bg-[var(--bg-panel)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 text-left relative overflow-hidden"
-                        style={{ animationDelay: `${index * 100}ms` }}
+                        className="quick-action-card group p-3 bg-[var(--bg-panel)]/70 backdrop-blur-md border border-[var(--border-color)] rounded-xl hover:border-[var(--accent-blue)] hover:bg-[var(--bg-panel)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 text-left relative overflow-hidden"
                       >
                         {/* Hover Glow Effect */}
                         <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent-blue)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -548,54 +568,60 @@ const ChatView: React.FC<ChatViewProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="w-full space-y-4 mt-4">
+              <div className="w-full mt-4">
                 {/* Debug: Show message count */}
                 {process.env.NODE_ENV === 'development' && (
-                  <div className="text-[10px] text-[var(--text-muted)] text-center opacity-50">
+                  <div className="text-[10px] text-[var(--text-muted)] text-center opacity-50 mb-4">
                     {messages.length} message(s) loaded
                   </div>
                 )}
-                {messages.map((message, index) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] p-4 rounded-2xl shadow-md ${
-                        message.role === 'user'
-                          ? 'bg-[var(--accent-blue)] text-white'
-                          : 'bg-[var(--bg-panel)] border border-[var(--border-color)] text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {/* Debug: Show message index and role */}
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-[8px] opacity-50 mb-1">
-                          #{index + 1} ({message.role})
+                {messages.map((message, index) => {
+                  const previousMessage = index > 0 ? messages[index - 1] : undefined;
+                  return (
+                    <Suspense
+                      key={message.id}
+                      fallback={
+                        <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+                          <div className={`max-w-[80%] p-4 rounded-2xl ${
+                            message.role === 'user'
+                              ? 'bg-[var(--accent-blue)] text-white'
+                              : 'bg-[var(--bg-panel)] border border-[var(--border-color)]'
+                          }`}>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                          </div>
                         </div>
-                      )}
-                      <Suspense fallback={
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                      }>
-                        <MarkdownMessage content={message.content} />
-                      </Suspense>
-                    </div>
-                  </div>
-                ))}
+                      }
+                    >
+                      <MessageBubble
+                        message={message}
+                        index={index}
+                        previousMessage={previousMessage}
+                        onCopy={handleCopyMessage}
+                        onRegenerate={handleRegenerate}
+                        onEdit={handleEditMessage}
+                      >
+                        <MarkdownMessage 
+                          content={message.content} 
+                          textColor={message.role === 'user' ? 'white' : undefined}
+                        />
+                      </MessageBubble>
+                    </Suspense>
+                  );
+                })}
                 {isLoading && (
-                  <div className="flex justify-start animate-in fade-in duration-300">
-                    <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] p-4 rounded-2xl">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  <Suspense fallback={
+                    <div className="flex justify-start">
+                      <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] p-4 rounded-2xl">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                {error && (
-                  <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl animate-in fade-in duration-300">
-                    <p className="text-sm text-rose-400">{error}</p>
-                  </div>
+                  }>
+                    <LoadingIndicator />
+                  </Suspense>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -634,47 +660,35 @@ const ChatView: React.FC<ChatViewProps> = ({
               </div>
             </div>
 
-            <form 
-              onSubmit={handleSubmit} 
-              className="relative bg-[var(--bg-panel)]/90 backdrop-blur-xl border border-[var(--border-color)] rounded-2xl flex items-center shadow-2xl transition-all duration-300 focus-within:border-[var(--accent-blue)] focus-within:ring-4 ring-[var(--accent-blue)]/10 overflow-hidden"
-            >
-              <input 
-                ref={inputRef}
-                type="text" 
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !isLoading && query.trim()) {
-                    console.log('[ChatView] Enter key pressed, calling handleSubmit');
-                    e.preventDefault();
-                    handleSubmit(e as unknown as React.FormEvent);
-                  }
-                }}
-                placeholder={viewMode === 'project_chat' ? "Ask anything about your project..." : "Ask anything globally..."} 
-                disabled={isLoading}
-                className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium px-6 py-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] disabled:opacity-50 h-14"
-              />
-              <div className="flex items-center gap-1.5 pr-2">
-                 <button 
-                   type="button"
-                   className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors rounded-lg hover:bg-white/5"
-                   title="Attach file"
-                 >
-                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                 </button>
-                 <button 
-                   type="submit"
-                   disabled={isLoading || !query.trim()}
-                   className="bg-[var(--accent-blue)] w-10 h-10 flex items-center justify-center rounded-xl text-white shadow-xl hover:bg-blue-600 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                 >
-                   {isLoading ? (
-                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                   ) : (
-                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-                   )}
-                 </button>
+            <Suspense fallback={
+              <div className="relative bg-[var(--bg-panel)]/90 backdrop-blur-xl border border-[var(--border-color)] rounded-2xl flex items-center shadow-2xl p-4">
+                <input 
+                  type="text" 
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={viewMode === 'project_chat' ? "Ask anything about your project..." : "Ask anything globally..."} 
+                  disabled={isLoading}
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium px-6 py-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] disabled:opacity-50 h-14"
+                />
+                <button 
+                  type="submit"
+                  disabled={isLoading || !query.trim()}
+                  className="bg-[var(--accent-blue)] w-10 h-10 flex items-center justify-center rounded-xl text-white shadow-xl"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                </button>
               </div>
-            </form>
+            }>
+              <ChatInput
+                ref={chatInputRef}
+                value={query}
+                onChange={setQuery}
+                onSubmit={handleSubmit}
+                isLoading={isLoading}
+                viewMode={viewMode}
+                disabled={false}
+              />
+            </Suspense>
           </div>
         </div>
       </div>

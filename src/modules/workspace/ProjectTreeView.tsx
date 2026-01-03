@@ -1,8 +1,8 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import { Project, deliverablesMap } from '../../data';
 import { useAuth } from '../../context/AuthContext';
 import { Department, Role } from '../../types';
-import { getProjectTeamByDepartment, DepartmentTeam } from '../../lib/supabase';
+import { getProjectTeamByDepartment, DepartmentTeam, supabase } from '../../lib/supabase';
 
 interface ProjectTreeViewProps {
   projects: Project[];
@@ -14,6 +14,7 @@ interface ProjectTreeViewProps {
   onProjectEditClick?: (projectId: string) => void;
   newProjectData?: { id: string; createdAt: number } | null;
   teamRefreshTrigger?: number;
+  hodRefreshTrigger?: number;
 }
 
 // 40 seconds in milliseconds (wait time for backend team assignment)
@@ -40,12 +41,15 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({
   onProjectEditClick,
   newProjectData,
   teamRefreshTrigger,
+  hodRefreshTrigger,
 }) => {
   const { user } = useAuth();
   const [showTeamNode, setShowTeamNode] = useState(false);
   const [departmentTeams, setDepartmentTeams] = useState<DepartmentTeam[]>([]);
   const [isLoadingTeam, setIsLoadingTeam] = useState(false);
   const [isWaitingForTeamAssignment, setIsWaitingForTeamAssignment] = useState(false);
+  const channelRef = useRef<any>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Check if user can manage team (PM department, HOD role, ADMIN, or HEAD_SES)
   const canManageTeam = user?.department === Department.PROJECT_MANAGEMENT || 
@@ -114,6 +118,78 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({
       fetchTeams();
     }
   }, [teamRefreshTrigger, fetchTeams, showTeamNode]);
+
+  // Refetch team data when HOD refresh trigger changes (after HOD assignments are saved)
+  useEffect(() => {
+    if (hodRefreshTrigger !== undefined && hodRefreshTrigger > 0 && showTeamNode) {
+      fetchTeams();
+    }
+  }, [hodRefreshTrigger, fetchTeams, showTeamNode]);
+
+  // Debounced handler for realtime updates
+  const handleRealtimeUpdate = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      if (showTeamNode && activeProject.id) {
+        console.log('[ProjectTreeView] Real-time update detected, refreshing team data');
+        fetchTeams();
+      }
+    }, 1000); // 1 second debounce to avoid excessive updates
+  }, [fetchTeams, showTeamNode, activeProject.id]);
+
+  // Set up real-time subscription for participant_project_assignments
+  useEffect(() => {
+    if (!activeProject.id) {
+      return;
+    }
+
+    // Clean up existing subscription if any
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    // Create new subscription channel for this project
+    const channel = supabase
+      .channel(`project_assignments:${activeProject.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'participant_project_assignments',
+          filter: `project_id=eq.${activeProject.id}`,
+        },
+        (payload) => {
+          console.log('[ProjectTreeView] Real-time database change:', payload);
+          handleRealtimeUpdate();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[ProjectTreeView] Successfully subscribed to real-time updates for project:', activeProject.id);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[ProjectTreeView] Error subscribing to real-time updates');
+        }
+      });
+
+    channelRef.current = channel;
+
+    // Cleanup subscription on unmount or project change
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [activeProject.id, handleRealtimeUpdate]);
   
   // Only show the active project's structure
   const deliverables = deliverablesMap[activeProject.id] || [];

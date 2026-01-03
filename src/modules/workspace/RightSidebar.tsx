@@ -42,6 +42,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   const [hodModalProject, setHodModalProject] = useState<{ id: string; name: string } | null>(null);
   const [teamMemberModal, setTeamMemberModal] = useState<{ projectId: string; projectName: string; discipline: string } | null>(null);
   const [teamRefreshTrigger, setTeamRefreshTrigger] = useState(0);
+  const [hodRefreshTrigger, setHodRefreshTrigger] = useState(0);
   const [editProjectId, setEditProjectId] = useState<string | null>(null);
   
   // Update URL when viewMode changes
@@ -81,12 +82,10 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
     setHodModalProject(null);
   }, []);
 
-  // Handle HOD assignment completion - refresh will happen naturally on next render
+  // Handle HOD assignment completion - trigger refresh of project tree
   const handleHODAssignmentComplete = useCallback(() => {
-    // After HOD assignments are saved, the backend will have updated the assignments
-    // The ProjectTreeView will automatically refetch when it re-renders
-    // We don't need to do anything special here as the data is fetched from the database
-    console.log('[RightSidebar] HOD assignments updated, ProjectTreeView will refresh on next render');
+    // Increment refresh trigger to signal ProjectTreeView to refetch team data
+    setHodRefreshTrigger(prev => prev + 1);
   }, []);
 
   // Handle team member node click - open team member assignment modal
@@ -147,45 +146,36 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
         <div className="absolute top-4 left-0 w-1 h-8 bg-[var(--accent-blue)] opacity-40"></div>
         
         <div className="flex flex-col relative z-10 w-full">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)] animate-pulse"></div>
-              <span className="text-[8px] font-black text-[var(--text-muted)] tracking-[0.4em] uppercase">
-                {viewMode === 'deliverable' ? 'Operational Context' : 'Structural Hierarchy'}
-              </span>
-            </div>
-            
-            {/* View Toggle Buttons - Only for PM department or HOD role */}
-            {canToggleViews && (
-              <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)]">
-                <button 
-                  onClick={() => handleViewModeChange('project')}
-                  className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
-                    viewMode === 'project' 
-                      ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  Project
-                </button>
-                <button 
-                  onClick={() => handleViewModeChange('deliverable')}
-                  className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
-                    viewMode === 'deliverable' 
-                      ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  Deliv
-                </button>
-              </div>
-            )}
-          </div>
-          <h2 className="text-[15px] font-black uppercase tracking-tight text-[var(--text-primary)] leading-tight truncate">
+          <h2 className="text-[15px] font-black uppercase tracking-tight text-[var(--text-primary)] leading-tight truncate mb-1.5">
             {viewMode === 'deliverable' 
               ? (props.activeDeliverable?.name || 'SELECT DELIVERABLE')
               : props.activeProject.name}
           </h2>
+          {/* View Toggle Buttons - Only for PM department or HOD role */}
+          {canToggleViews && (
+            <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)] w-fit">
+              <button 
+                onClick={() => handleViewModeChange('project')}
+                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === 'project' 
+                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Project Stage
+              </button>
+              <button 
+                onClick={() => handleViewModeChange('deliverable')}
+                className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === 'deliverable' 
+                    ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Deliverable Stage
+              </button>
+            </div>
+          )}
         </div>
       </div>
       
@@ -215,6 +205,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
                   onProjectEditClick={handleProjectEditClick}
                   newProjectData={props.newProjectData}
                   teamRefreshTrigger={teamRefreshTrigger}
+                  hodRefreshTrigger={hodRefreshTrigger}
                 />
               </PanZoomCanvas>
             </Suspense>

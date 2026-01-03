@@ -344,7 +344,8 @@ body {
 /* Ensure input text is visible in dark mode */
 input[type="email"],
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+textarea {
     color: #f0f4f8 !important;
     -webkit-text-fill-color: #f0f4f8 !important;
 }
@@ -353,7 +354,11 @@ input[type="password"] {
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
     -webkit-text-fill-color: #f0f4f8 !important;
     -webkit-box-shadow: 0 0 0px 1000px rgba(13, 17, 23, 0.6) inset !important;
     box-shadow: 0 0 0px 1000px rgba(13, 17, 23, 0.6) inset !important;
@@ -363,7 +368,8 @@ input:-webkit-autofill:active {
 /* Light mode input styling */
 [data-theme='light'] input[type="email"],
 [data-theme='light'] input[type="text"],
-[data-theme='light'] input[type="password"] {
+[data-theme='light'] input[type="password"],
+[data-theme='light'] textarea {
     color: #0f172a !important;
     -webkit-text-fill-color: #0f172a !important;
 }
@@ -371,7 +377,11 @@ input:-webkit-autofill:active {
 [data-theme='light'] input:-webkit-autofill,
 [data-theme='light'] input:-webkit-autofill:hover,
 [data-theme='light'] input:-webkit-autofill:focus,
-[data-theme='light'] input:-webkit-autofill:active {
+[data-theme='light'] input:-webkit-autofill:active,
+[data-theme='light'] textarea:-webkit-autofill,
+[data-theme='light'] textarea:-webkit-autofill:hover,
+[data-theme='light'] textarea:-webkit-autofill:focus,
+[data-theme='light'] textarea:-webkit-autofill:active {
     -webkit-text-fill-color: #0f172a !important;
     -webkit-box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.85) inset !important;
     box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.85) inset !important;
@@ -403,8 +413,16 @@ input:-webkit-autofill:active {
 }
 
 /* Link hover effects */
+.markdown-content a {
+    color: var(--accent-blue);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid transparent;
+}
+
 .markdown-content a:hover {
-    text-decoration: underline;
+    text-decoration: none;
+    border-bottom-color: var(--accent-blue);
     opacity: 0.9;
 }
 
@@ -421,6 +439,14 @@ input:-webkit-autofill:active {
 .markdown-content table {
     border-collapse: collapse;
     width: 100%;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.markdown-content thead {
+    background-color: var(--bg-base);
 }
 
 .markdown-content tbody tr:nth-child(even) {
@@ -429,6 +455,18 @@ input:-webkit-autofill:active {
 
 .markdown-content tbody tr:hover {
     background-color: var(--bg-panel);
+    transition: background-color 0.2s ease;
+}
+
+.markdown-content th,
+.markdown-content td {
+    padding: 0.75rem;
+    border-right: 1px solid var(--border-color);
+}
+
+.markdown-content th:last-child,
+.markdown-content td:last-child {
+    border-right: none;
 }
 
 /* Code block enhancements */
@@ -461,4 +499,242 @@ input:-webkit-autofill:active {
     margin-top: 0.5rem;
     margin-bottom: 0.5rem;
 }
+
+/* ========================================
+   CHAT INTERFACE ANIMATIONS (Performance Optimized)
+   ======================================== */
+
+/* Typing Indicator - Pure CSS, GPU-accelerated */
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent-blue);
+    display: inline-block;
+    animation: typing-bounce 1.4s infinite ease-in-out;
+    will-change: transform;
+}
+
+@keyframes typing-bounce {
+    0%, 60%, 100% {
+        transform: translateY(0) scale(1);
+        opacity: 0.7;
+    }
+    30% {
+        transform: translateY(-10px) scale(1.1);
+        opacity: 1;
+    }
+}
+
+/* Message Bubble Animations - GPU-accelerated transforms */
+.message-bubble {
+    animation: message-fade-in 0.3s ease-out;
+    will-change: transform, opacity;
+    contain: layout style paint;
+}
+
+@keyframes message-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Stagger animation for multiple messages */
+.message-bubble:nth-child(1) { animation-delay: 0s; }
+.message-bubble:nth-child(2) { animation-delay: 0.05s; }
+.message-bubble:nth-child(3) { animation-delay: 0.1s; }
+.message-bubble:nth-child(4) { animation-delay: 0.15s; }
+.message-bubble:nth-child(5) { animation-delay: 0.2s; }
+
+/* Smooth hover transitions */
+.message-bubble {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.message-bubble:hover {
+    transform: translateY(-1px);
+}
+
+/* Custom Scrollbar for Chat */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Chat Input Textarea - Ensure text is always visible with high contrast */
+textarea {
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    font-weight: 500 !important;
+}
+
+textarea::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.8 !important;
+    font-weight: 400 !important;
+}
+
+[data-theme='light'] textarea {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    font-weight: 500 !important;
+}
+
+[data-theme='light'] textarea::placeholder {
+    color: #64748b !important;
+    opacity: 0.8 !important;
+    font-weight: 400 !important;
+}
+
+/* Dark mode textarea - ensure high contrast */
+:not([data-theme='light']) textarea {
+    color: #f0f4f8 !important;
+    -webkit-text-fill-color: #f0f4f8 !important;
+    font-weight: 500 !important;
+}
+
+:not([data-theme='light']) textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 0.8 !important;
+    font-weight: 400 !important;
+}
+
+/* Chat Input Textarea - Maximum specificity to ensure text visibility */
+.chat-input-textarea {
+    color: #f0f4f8 !important;
+    -webkit-text-fill-color: #f0f4f8 !important;
+    font-weight: 500 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.chat-input-textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 0.8 !important;
+    font-weight: 400 !important;
+}
+
+.chat-input-textarea:focus {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.chat-input-textarea:-webkit-autofill,
+.chat-input-textarea:-webkit-autofill:hover,
+.chat-input-textarea:-webkit-autofill:focus,
+.chat-input-textarea:-webkit-autofill:active {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+    box-shadow: 0 0 0px 1000px transparent inset !important;
+    background-color: transparent !important;
+    -webkit-text-fill-color: #f0f4f8 !important;
+}
+
+[data-theme='light'] .chat-input-textarea {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    font-weight: 500 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+[data-theme='light'] .chat-input-textarea::placeholder {
+    color: #64748b !important;
+    opacity: 0.8 !important;
+    font-weight: 400 !important;
+}
+
+[data-theme='light'] .chat-input-textarea:focus {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+[data-theme='light'] .chat-input-textarea:-webkit-autofill,
+[data-theme='light'] .chat-input-textarea:-webkit-autofill:hover,
+[data-theme='light'] .chat-input-textarea:-webkit-autofill:focus,
+[data-theme='light'] .chat-input-textarea:-webkit-autofill:active {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+    box-shadow: 0 0 0px 1000px transparent inset !important;
+    background-color: transparent !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+
+/* Input Focus Glow - CSS only */
+.chat-input:focus-within {
+    box-shadow: 0 0 0 4px rgba(31, 93, 142, 0.1), 0 0 20px rgba(31, 93, 142, 0.2);
+}
+
+/* Message Actions Animation */
+@keyframes fade-in-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-in {
+    animation: fade-in-slide-up 0.2s ease-out;
+}
+
+/* Performance: Use contain for better rendering */
+.message-bubble {
+    contain: layout style paint;
+}
+
+/* Empty State Quick Action Cards Animation */
+@keyframes quick-action-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.quick-action-card {
+    animation: quick-action-fade-in 0.4s ease-out backwards;
+}
+
+/* Stagger animation for quick action cards */
+.quick-action-card:nth-child(1) { animation-delay: 0.1s; }
+.quick-action-card:nth-child(2) { animation-delay: 0.2s; }
+.quick-action-card:nth-child(3) { animation-delay: 0.3s; }
+.quick-action-card:nth-child(4) { animation-delay: 0.4s; }
+.quick-action-card:nth-child(5) { animation-delay: 0.5s; }
+.quick-action-card:nth-child(6) { animation-delay: 0.6s; }
+.quick-action-card:nth-child(7) { animation-delay: 0.7s; }
+.quick-action-card:nth-child(8) { animation-delay: 0.8s; }
 

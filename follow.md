@@ -126,4 +126,6 @@ All components must be designed assuming future scale to:
    see which time the refresh want which time real time want that yi=ou need to analize the projet and do that that is verey user experience manner
 ---
 
+make sure you creating that things are responsible for the all laptop screens and the dekstop screens
+
 **This document is mandatory and non-negotiable for enterprise production code.**
