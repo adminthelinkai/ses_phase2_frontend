@@ -131,7 +131,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className="absolute top-full right-0 mt-2 w-[420px] bg-[var(--bg-panel)] backdrop-blur-xl border border-[var(--border-color)] rounded-xl shadow-2xl z-[10000] flex flex-col max-h-[600px] animate-in fade-in slide-in-from-top-2 duration-200"
+      className="w-[420px] bg-[var(--bg-panel)] backdrop-blur-xl border border-[var(--border-color)] rounded-xl shadow-2xl flex flex-col max-h-[600px] animate-in fade-in slide-in-from-top-2 duration-200"
       role="dialog"
       aria-label="Notifications"
       aria-modal="true"
