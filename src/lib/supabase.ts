@@ -1265,3 +1265,106 @@ export async function updateProjectTeamMembers(
   }
 }
 
+
+// ============== TASK NOTIFICATIONS ==============
+
+export interface Task {
+  task_id: string;
+  project_id: string | null;
+  assigned_to_participant_id: string | null;
+  title: string;
+  description: string | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | string;
+  priority: 'high' | 'medium' | 'low' | string;
+  due_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  execution_id: string | null;
+  task_sequence: number | null;
+  expected_output: string | null;
+  agent_assigned: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  result_content: string | null;
+  error_message: string | null;
+  assigned_by_participant_id: string | null;
+  parent_task_id: string | null;
+  deliverable_reference: string | null;
+  suggested_tools: any;
+  context_data: any;
+  complexity: string | null;
+}
+
+export interface TaskNotification extends Task {
+  unread: boolean;
+}
+
+/**
+ * Get user's tasks (for notifications)
+ */
+export async function getUserTasks(participantId: string): Promise<Task[]> {
+  if (!participantId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to_participant_id', participantId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('[Supabase] Error fetching user tasks:', error);
+    return [];
+  }
+
+  return (data || []) as Task[];
+}
+
+/**
+ * Mark a task as read
+ */
+export async function markTaskAsRead(taskId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      is_read: true,
+      read_at: new Date().toISOString(),
+    })
+    .eq('task_id', taskId);
+
+  if (error) {
+    console.error('[Supabase] Error marking task as read:', error);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Mark all user's tasks as read
+ */
+export async function markAllTasksAsRead(participantId: string): Promise<boolean> {
+  if (!participantId) {
+    return false;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      is_read: true,
+      read_at: new Date().toISOString(),
+    })
+    .eq('assigned_to_participant_id', participantId)
+    .eq('is_read', false);
+
+  if (error) {
+    console.error('[Supabase] Error marking all tasks as read:', error);
+    return false;
+  }
+
+  return true;
+}

@@ -389,3 +389,76 @@ input:-webkit-autofill:active {
     animation: fade-hint 4s ease-out forwards;
 }
 
+/* ========================================
+   MARKDOWN STYLES (Optimized for Readability)
+   ======================================== */
+
+.markdown-content {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.75;
+    letter-spacing: 0;
+    color: var(--text-primary);
+    font-weight: 400;
+}
+
+/* Link hover effects */
+.markdown-content a:hover {
+    text-decoration: underline;
+    opacity: 0.9;
+}
+
+/* Ensure proper spacing for first/last elements */
+.markdown-content > *:first-child {
+    margin-top: 0;
+}
+
+.markdown-content > *:last-child {
+    margin-bottom: 0;
+}
+
+/* Enhanced table styling for better readability */
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.markdown-content tbody tr:nth-child(even) {
+    background-color: var(--bg-base);
+}
+
+.markdown-content tbody tr:hover {
+    background-color: var(--bg-panel);
+}
+
+/* Code block enhancements */
+.markdown-content pre {
+    overflow-x: auto;
+}
+
+.markdown-content code {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* List enhancements for better readability */
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 1rem;
+}
+
+.markdown-content li {
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+}
+
+.markdown-content li > p {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.markdown-content li > ul,
+.markdown-content li > ol {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+

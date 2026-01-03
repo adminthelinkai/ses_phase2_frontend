@@ -8,6 +8,7 @@ import type { CreatedProjectData } from '../projects/CreateProjectModal';
 
 // Lazy load modals for code splitting (performance optimization)
 const CreateProjectModal = lazy(() => import('../projects'));
+const NotificationContainer = lazy(() => import('../../components/NotificationContainer'));
 
 interface SidebarProps {
   width: number;
@@ -69,11 +70,16 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
     <aside style={{ width: props.width }} className="bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col relative shrink-0 transition-all duration-300">
       {!props.isCollapsed ? (
         <>
-      <div className="h-16 flex items-center px-6 border-b border-[var(--border-color)] shrink-0">
-        <Link to="/home" className="w-8 h-8 bg-[var(--accent-blue)] rounded-lg flex items-center justify-center mr-3 shadow-lg transition-all active:scale-90">
-          <span className="text-white font-black text-sm">E</span>
-        </Link>
-        <span className="font-black text-lg tracking-tighter uppercase select-none">EPCM OS</span>
+      <div className="h-16 flex items-center justify-between px-6 border-b border-[var(--border-color)] shrink-0">
+        <div className="flex items-center">
+          <Link to="/home" className="w-8 h-8 bg-[var(--accent-blue)] rounded-lg flex items-center justify-center mr-3 shadow-lg transition-all active:scale-90">
+            <span className="text-white font-black text-sm">E</span>
+          </Link>
+          <span className="font-black text-lg tracking-tighter uppercase select-none">EPCM OS</span>
+        </div>
+        <Suspense fallback={<div className="w-9 h-9" />}>
+          <NotificationContainer />
+        </Suspense>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar py-6">

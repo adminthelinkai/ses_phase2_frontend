@@ -23,6 +23,7 @@ import {
 // Lazy load the components
 const DepartmentBackgroundProvider = lazy(() => import('../../components/backgrounds/DepartmentBackgroundProvider'));
 const ChatSessionPanel = lazy(() => import('./ChatSessionPanel'));
+const MarkdownMessage = lazy(() => import('../../components/MarkdownMessage'));
 
 interface ChatViewProps {
   department?: Department;
@@ -572,7 +573,11 @@ const ChatView: React.FC<ChatViewProps> = ({
                           #{index + 1} ({message.role})
                         </div>
                       )}
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      <Suspense fallback={
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      }>
+                        <MarkdownMessage content={message.content} />
+                      </Suspense>
                     </div>
                   </div>
                 ))}

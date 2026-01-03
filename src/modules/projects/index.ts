@@ -5,6 +5,7 @@
 
 export { default } from './CreateProjectModal';
 export { default as CreateProjectModal } from './CreateProjectModal';
+export { default as UploadDocumentModal } from './UploadDocumentModal';
 export { default as TeamAssignmentModal } from './TeamAssignmentModal';
 export { default as HODAssignmentModal } from './HODAssignmentModal';
 export type { CreatedProjectData } from './CreateProjectModal';

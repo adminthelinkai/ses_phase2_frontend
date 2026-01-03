@@ -11,6 +11,7 @@ import type { CreatedProjectData } from '../projects/CreateProjectModal';
 
 const ChatView = lazy(() => import('./ChatView'));
 const NodeContextView = lazy(() => import('./NodeContextView'));
+const TaskNotificationProvider = lazy(() => import('../../providers/TaskNotificationProvider').then(m => ({ default: m.TaskNotificationProvider })));
 
 const LoadingView = () => (
   <div className="flex-1 flex items-center justify-center bg-[var(--bg-base)]">
@@ -259,17 +260,21 @@ const Workspace = () => {
     };
     localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(state));
     
-    // Update URL params
-    const params = new URLSearchParams();
+    // Update URL params - preserve existing params like sidebarView
+    const params = new URLSearchParams(searchParams);
     params.set('project', activeProject.id);
     if (activeDeliverableId) {
       params.set('deliverable', activeDeliverableId);
+    } else {
+      params.delete('deliverable');
     }
     if (activeNodeId) {
       params.set('node', activeNodeId);
+    } else {
+      params.delete('node');
     }
     setSearchParams(params, { replace: true });
-  }, [activeProject.id, activeDeliverableId, activeNodeId, viewMode, setSearchParams, isStateInitialized]);
+  }, [activeProject.id, activeDeliverableId, activeNodeId, viewMode, setSearchParams, isStateInitialized, searchParams]);
 
   // Resizing Handlers
   useEffect(() => {
@@ -302,6 +307,18 @@ const Workspace = () => {
     navigate(`/workspace?project=${activeProject.id}&deliverable=${id}`, { replace: true });
   };
 
+  const handleNodeSelect = (nodeId: string) => {
+    setActiveNodeId(nodeId);
+    // Update URL immediately, preserving all existing params
+    const params = new URLSearchParams(searchParams);
+    params.set('project', activeProject.id);
+    if (activeDeliverableId) {
+      params.set('deliverable', activeDeliverableId);
+    }
+    params.set('node', nodeId);
+    setSearchParams(params, { replace: true });
+  };
+
   const handleViewModeChange = (mode: 'project_chat' | 'global_chat') => {
     setViewMode(mode);
   };
@@ -310,7 +327,9 @@ const Workspace = () => {
   const userDepartment = user?.department;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-300 font-inter">
+    <Suspense fallback={<LoadingView />}>
+      <TaskNotificationProvider participantId={user?.participantId || null}>
+        <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-300 font-inter">
       <Sidebar 
         width={isLeftCollapsed ? 50 : leftWidth}
         isCollapsed={isLeftCollapsed}
@@ -353,7 +372,7 @@ const Workspace = () => {
         activeDeliverable={activeDeliverable}
         nodes={currentNodes}
         activeNodeId={activeNodeId}
-        onNodeSelect={setActiveNodeId}
+        onNodeSelect={handleNodeSelect}
         onResizeStart={() => isResizingRight.current = true}
         // Project Tree Props
         projects={availableProjects}
@@ -363,7 +382,9 @@ const Workspace = () => {
         // New project data for team assignment node visibility
         newProjectData={newProjectData}
       />
-    </div>
+        </div>
+      </TaskNotificationProvider>
+    </Suspense>
   );
 };
 

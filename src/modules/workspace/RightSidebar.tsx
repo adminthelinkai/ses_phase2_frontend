@@ -1,4 +1,5 @@
-import React, { useState, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useCallback, lazy, Suspense, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { NodeItem, DeliverableItem, Project } from '../../data';
 import { useAuth } from '../../context/AuthContext';
 import { Department, Role } from '../../types';
@@ -8,6 +9,7 @@ const ProjectTreeView = lazy(() => import('./ProjectTreeView'));
 const PanZoomCanvas = lazy(() => import('../../components/canvas'));
 const HODAssignmentModal = lazy(() => import('../projects/HODAssignmentModal'));
 const TeamMemberAssignmentModal = lazy(() => import('../projects/TeamMemberAssignmentModal'));
+const EditProjectModal = lazy(() => import('../projects/EditProjectModal'));
 
 interface RightSidebarProps {
   width: number;
@@ -29,9 +31,31 @@ interface RightSidebarProps {
 
 const RightSidebar: React.FC<RightSidebarProps> = (props) => {
   const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<'project' | 'deliverable'>('deliverable');
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Initialize viewMode from URL, default to 'deliverable'
+  const [viewMode, setViewMode] = useState<'project' | 'deliverable'>(() => {
+    const sidebarView = searchParams.get('sidebarView');
+    return (sidebarView === 'project' || sidebarView === 'deliverable') ? sidebarView : 'deliverable';
+  });
+  
   const [hodModalProject, setHodModalProject] = useState<{ id: string; name: string } | null>(null);
   const [teamMemberModal, setTeamMemberModal] = useState<{ projectId: string; projectName: string; discipline: string } | null>(null);
+  const [teamRefreshTrigger, setTeamRefreshTrigger] = useState(0);
+  const [editProjectId, setEditProjectId] = useState<string | null>(null);
+  
+  // Update URL when viewMode changes
+  const handleViewModeChange = useCallback((mode: 'project' | 'deliverable') => {
+    setViewMode(mode);
+    const params = new URLSearchParams(searchParams);
+    if (mode === 'deliverable') {
+      // Remove sidebarView if it's the default (deliverable)
+      params.delete('sidebarView');
+    } else {
+      params.set('sidebarView', mode);
+    }
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
   
   const completedCount = props.nodes.filter(n => n.status === 'completed').length;
   const progressPercent = props.nodes.length > 0 ? (completedCount / props.nodes.length) * 100 : 0;
@@ -77,9 +101,25 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
 
   // Handle team member assignment completion
   const handleTeamMemberAssignmentComplete = useCallback(() => {
-    // After team member assignments are saved, the backend will have updated the assignments
-    // The ProjectTreeView will automatically refetch when it re-renders
-    console.log('[RightSidebar] Team member assignments updated, ProjectTreeView will refresh on next render');
+    // Increment refresh trigger to signal ProjectTreeView to refetch team data
+    setTeamRefreshTrigger(prev => prev + 1);
+  }, []);
+
+  // Handle project edit click
+  const handleProjectEditClick = useCallback((projectId: string) => {
+    setEditProjectId(projectId);
+  }, []);
+
+  // Close edit project modal
+  const handleCloseEditProjectModal = useCallback(() => {
+    setEditProjectId(null);
+  }, []);
+
+  // Handle project update success
+  const handleProjectUpdateSuccess = useCallback(() => {
+    // Optionally refresh project list or update UI
+    // The project data will be refetched when the modal closes
+    setEditProjectId(null);
   }, []);
 
   const commands = [
@@ -119,7 +159,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
             {canToggleViews && (
               <div className="flex bg-[var(--bg-sidebar)]/60 p-0.5 rounded-md border border-[var(--border-color)]">
                 <button 
-                  onClick={() => setViewMode('project')}
+                  onClick={() => handleViewModeChange('project')}
                   className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
                     viewMode === 'project' 
                       ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
@@ -129,7 +169,7 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
                   Project
                 </button>
                 <button 
-                  onClick={() => setViewMode('deliverable')}
+                  onClick={() => handleViewModeChange('deliverable')}
                   className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all ${
                     viewMode === 'deliverable' 
                       ? 'bg-[var(--accent-blue)] text-white shadow-sm' 
@@ -168,11 +208,13 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
                   onProjectSelect={props.onProjectSelect}
                   onDeliverableSelect={(id) => {
                     props.onDeliverableSelect(id);
-                    setViewMode('deliverable');
+                    handleViewModeChange('deliverable');
                   }}
                   onTeamNodeClick={handleTeamNodeClick}
                   onTeamMemberClick={handleTeamMemberClick}
+                  onProjectEditClick={handleProjectEditClick}
                   newProjectData={props.newProjectData}
+                  teamRefreshTrigger={teamRefreshTrigger}
                 />
               </PanZoomCanvas>
             </Suspense>
@@ -352,6 +394,21 @@ const RightSidebar: React.FC<RightSidebarProps> = (props) => {
             discipline={teamMemberModal.discipline}
             onClose={handleCloseTeamMemberModal}
             onComplete={handleTeamMemberAssignmentComplete}
+          />
+        </Suspense>
+      )}
+
+      {/* Edit Project Modal - Lazy loaded for code splitting */}
+      {editProjectId && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-8 h-8 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <EditProjectModal
+            projectId={editProjectId}
+            onClose={handleCloseEditProjectModal}
+            onSuccess={handleProjectUpdateSuccess}
           />
         </Suspense>
       )}

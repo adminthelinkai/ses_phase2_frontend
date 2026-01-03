@@ -122,6 +122,8 @@ All components must be designed assuming future scale to:
 - Extended workflows and integrations
 
    SEE IF ANY THING THIS COMPONAET CREATION THAT CODE SPLLITON IS IMPOR FOR THE PERFOMANC I GUSESS FOLLW THE PROJECT STRURE TO STORE THE COMPONENTS 
+
+   see which time the refresh want which time real time want that yi=ou need to analize the projet and do that that is verey user experience manner
 ---
 
 **This document is mandatory and non-negotiable for enterprise production code.**

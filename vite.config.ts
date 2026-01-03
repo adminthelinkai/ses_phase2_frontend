@@ -16,7 +16,8 @@ export default defineConfig(({ mode }) => {
         'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
         'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
         'process.env.VITE_CHAT_API_URL': JSON.stringify(env.VITE_CHAT_API_URL),
-        'process.env.VITE_PROJECT_API_URL': JSON.stringify(env.VITE_PROJECT_API_URL)
+        'process.env.VITE_PROJECT_API_URL': JSON.stringify(env.VITE_PROJECT_API_URL),
+        'process.env.VITE_DOCUMENTS_API_URL': JSON.stringify(env.VITE_DOCUMENTS_API_URL)
       },
       resolve: {
         alias: {

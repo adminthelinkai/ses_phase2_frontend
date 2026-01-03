@@ -11,7 +11,9 @@ interface ProjectTreeViewProps {
   onDeliverableSelect: (deliverableId: string) => void;
   onTeamNodeClick?: (projectId: string, projectName: string) => void;
   onTeamMemberClick?: (projectId: string, projectName: string, discipline: string) => void;
+  onProjectEditClick?: (projectId: string) => void;
   newProjectData?: { id: string; createdAt: number } | null;
+  teamRefreshTrigger?: number;
 }
 
 // 40 seconds in milliseconds (wait time for backend team assignment)
@@ -35,7 +37,9 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({
   onDeliverableSelect,
   onTeamNodeClick,
   onTeamMemberClick,
+  onProjectEditClick,
   newProjectData,
+  teamRefreshTrigger,
 }) => {
   const { user } = useAuth();
   const [showTeamNode, setShowTeamNode] = useState(false);
@@ -104,6 +108,13 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({
     return () => clearTimeout(timer);
   }, [newProjectData, activeProject.id, fetchTeams]);
   
+  // Refetch team data when refresh trigger changes (after team member assignments are saved)
+  useEffect(() => {
+    if (teamRefreshTrigger !== undefined && teamRefreshTrigger > 0 && showTeamNode) {
+      fetchTeams();
+    }
+  }, [teamRefreshTrigger, fetchTeams, showTeamNode]);
+  
   // Only show the active project's structure
   const deliverables = deliverablesMap[activeProject.id] || [];
   
@@ -136,7 +147,12 @@ const ProjectTreeView: React.FC<ProjectTreeViewProps> = memo(({
 
         {/* PROJECT ROOT - Level 0 */}
         <div className="relative z-10 group w-full max-w-[280px]">
-          <div className="bg-[var(--bg-panel)] border-2 border-amber-500/60 rounded-lg px-5 py-4 flex flex-col transition-all duration-300 hover:border-amber-500 hover:shadow-lg hover:-translate-y-0.5 relative">
+          <div 
+            onClick={() => onProjectEditClick?.(activeProject.id)}
+            className={`bg-[var(--bg-panel)] border-2 border-amber-500/60 rounded-lg px-5 py-4 flex flex-col transition-all duration-300 hover:border-amber-500 hover:shadow-lg hover:-translate-y-0.5 relative ${
+              onProjectEditClick ? 'cursor-pointer' : ''
+            }`}
+          >
             {/* Header */}
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[8px] font-mono font-bold text-amber-500/70 uppercase tracking-[0.2em]">

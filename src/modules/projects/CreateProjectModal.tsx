@@ -1,6 +1,9 @@
-import React, { useState, useCallback, memo } from 'react';
+import React, { useState, useCallback, memo, lazy, Suspense } from 'react';
 import { createProject, CreateProjectPayload } from '../../api/projects';
 import { useToast } from '../../components/Toast';
+
+// Lazy load UploadDocumentModal for code splitting
+const UploadDocumentModal = lazy(() => import('./UploadDocumentModal'));
 
 export interface CreatedProjectData {
   id: string;
@@ -35,6 +38,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
   
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  const [createdProjectName, setCreatedProjectName] = useState<string>('');
 
   // Handle input change
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -114,12 +120,11 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
         });
 
         showToast('Project created successfully', 'success');
-        // Pass project data to parent for team assignment
-        onSuccess({
-          id: projectId,
-          name: result.data.name || formData.name,
-        });
-        // Don't close here - parent will close after team assignment flow
+        
+        // Store created project info and show upload modal
+        setCreatedProjectId(projectId);
+        setCreatedProjectName(result.data.name || formData.name);
+        setShowUploadModal(true);
       } else {
         setErrors({ general: result.error });
         showToast(result.error || 'Failed to create project', 'error');
@@ -140,6 +145,30 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
     }
   }, [onClose, isSubmitting]);
 
+  // Handle upload modal close (user skipped or uploaded)
+  const handleUploadComplete = useCallback(() => {
+    setShowUploadModal(false);
+    // Pass project data to parent for team assignment
+    if (createdProjectId) {
+      onSuccess({
+        id: createdProjectId,
+        name: createdProjectName,
+      });
+    }
+  }, [createdProjectId, createdProjectName, onSuccess]);
+
+  // Handle upload modal skip/close
+  const handleUploadClose = useCallback(() => {
+    setShowUploadModal(false);
+    // Pass project data to parent for team assignment even if skipped
+    if (createdProjectId) {
+      onSuccess({
+        id: createdProjectId,
+        name: createdProjectName,
+      });
+    }
+  }, [createdProjectId, createdProjectName, onSuccess]);
+
   return (
     <div 
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
@@ -148,7 +177,8 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       
-      {/* Modal */}
+      {/* Modal - hide when upload modal is shown */}
+      {!showUploadModal && (
       <div className="relative w-full max-w-md bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
@@ -312,6 +342,23 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = memo(({ onClose, o
           </div>
         </form>
       </div>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && createdProjectId && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-8 h-8 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <UploadDocumentModal
+            onClose={handleUploadClose}
+            onSuccess={handleUploadComplete}
+            projectId={createdProjectId}
+            projectName={createdProjectName}
+          />
+        </Suspense>
+      )}
     </div>
   );
 });

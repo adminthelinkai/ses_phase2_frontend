@@ -65,15 +65,16 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-xl shadow-2xl animate-in slide-in-from-right-5 fade-in duration-300 ${bgColor}`}
+      className={`flex items-center gap-3 px-5 py-3.5 rounded-xl border backdrop-blur-xl shadow-2xl transform transition-all duration-300 ease-out animate-in slide-in-from-right-5 fade-in zoom-in-95 ${bgColor}`}
     >
       <ToastIcon type={toast.type} />
-      <p className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wide">{toast.message}</p>
+      <p className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wide flex-1">{toast.message}</p>
       <button
         onClick={() => onRemove(toast.id)}
-        className="ml-2 p-1 rounded-lg hover:bg-white/10 transition-colors"
+        className="ml-2 p-1.5 rounded-lg hover:bg-white/20 active:bg-white/30 transition-all duration-150 flex-shrink-0"
+        aria-label="Close toast"
       >
-        <svg className="w-3 h-3 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-3.5 h-3.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
@@ -117,5 +118,6 @@ export const useToast = (): ToastContextType => {
 };
 
 export default ToastProvider;
+
 
 
